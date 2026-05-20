@@ -1,108 +1,49 @@
-# CA Compliance Reminder
+# FinStruct
 
-A desktop application for Chartered Accountants to automatically email
-personalised compliance reminders to each client on the 1st of every month.
+Financial Statement Automation for CA / CS Practice — local-first desktop app built with Python + Tkinter.
 
 ---
 
-## Features
+## What It Does
 
-- **Auto-send on launch** — emails go out on the 1st of every month, the first
-  time you open the app that day. No scheduler or background service required.
-- **Per-client compliance assignments** — each client gets only the compliances
-  assigned to them, with due dates.
-- **16 pre-loaded Indian CA compliances** — GST, TDS/TCS, Income Tax, ROC/MCA,
-  PF/ESI, and more. Add custom ones any time.
-- **Bulk import** — load clients and compliances from CSV or XLSX files.
-  Download templates with one click.
-- **Encrypted at rest** — all PII (name, email, phone, PAN, GSTIN) is encrypted
-  using Fernet AES-128 before being written to the local SQLite database.
-- **DPDP Act 2023 compliant** — consent checkbox, hard-delete (right to erasure),
-  purpose limitation.
-- **Supports Gmail, Zoho Mail, Microsoft 365, custom SMTP** via App Passwords.
-  Your real login password is never stored.
-- **Activity log** — every send/fail event is recorded with a timestamp.
+FinStruct takes a Trial Balance, maps ledgers to Schedule III / ICAI NCE line items, and generates print-ready financial statements for seven entity types: **Company, LLP, Proprietary, Partnership, AOP, Trust, Section 8**.
+
+### Workflow
+1. **Entity Setup** — register entity name, type, financial year
+2. **Import TB** — paste or import Trial Balance from CSV / XLSX
+3. **Map Ledgers** — AI-assisted mapping to Schedule III codes
+4. **Review WTB** — confirm / override the working trial balance
+5. **PPE Register** — compute depreciation (SLM / WDV) and IT WDV
+6. **Generate FS** — one-click Balance Sheet + P&L
+7. **Notes** — auto-populated Notes to Accounts (1–29)
+8. **Reports** — Directors' Report and Audit Report editors
+9. **Export** — PDF, DOCX, or XLSX output
 
 ---
 
 ## Quick Start
 
 ### Prerequisites
-
-- Python 3.10 or later  →  <https://www.python.org/downloads/>
+- Python 3.10 or later — <https://www.python.org/downloads/>
 - On Windows: tick **"Add Python to PATH"** during installation
 
 ### Install
 
 ```cmd
-:: Clone or extract the project, then:
-cd Claudeproject
+git clone https://github.com/rajacacs/Claude-project_Finstruct.git
+cd Claude-project_Finstruct
 
-:: Create a virtual environment
 python -m venv venv
-
-:: Activate it  (Windows)
 venv\Scripts\activate
 
-:: Install the three required libraries
 pip install -r requirements.txt
 ```
 
 ### Run
 
 ```cmd
-python main.py
+python finstruct_app.py
 ```
-
----
-
-## First-Time Setup (5 minutes)
-
-1. **Email Setup tab** → click your provider (Gmail / Zoho / Microsoft 365) →
-   paste your App Password → **Test Connection** → **Save Account**
-2. **Clients tab** → **+ Add Client** → fill in Name, Email, tick Consent
-3. **Compliances tab** → 16 defaults are ready; add custom ones if needed
-4. **Clients tab** → select each client → **+ Add Compliance** to assign
-5. **Dashboard** → click **Send Now** to do a test send
-
-Auto-send happens automatically on the 1st of each month when the app opens.
-
----
-
-## Libraries to Install
-
-```
-cryptography>=41.0.0   — AES-128 encryption for stored personal data
-keyring>=24.0.0        — stores the encryption key in Windows Credential Manager
-openpyxl>=3.1.0        — read/write .xlsx files (remove if you only need CSV)
-```
-
-All other modules (`tkinter`, `sqlite3`, `smtplib`, `csv`, etc.) ship with Python.
-
----
-
-## Security & Privacy
-
-| Feature | Implementation |
-|---|---|
-| Encryption at rest | Fernet AES-128-CBC + HMAC-SHA256 (`cryptography` library) |
-| Key storage | Windows Credential Manager / macOS Keychain / Linux SecretService (file fallback) |
-| Data location | 100% local — `~/.ca_compliance_reminder/compliance_data.db` |
-| Email transit | SMTP STARTTLS (TLS in transit) |
-| Credentials | App Passwords only; your real password is never stored |
-| DPDP Act | Consent checkbox · AES encryption · hard-delete (right to erasure) |
-
----
-
-## App Data
-
-| Platform | Path |
-|---|---|
-| Windows | `C:\Users\<you>\.ca_compliance_reminder\` |
-| macOS / Linux | `~/.ca_compliance_reminder/` |
-
-- `compliance_data.db` — SQLite database (PII encrypted inside)
-- `app.log` — application log
 
 ---
 
@@ -110,28 +51,90 @@ All other modules (`tkinter`, `sqlite3`, `smtplib`, `csv`, etc.) ship with Pytho
 
 ```cmd
 pip install pyinstaller
-pyinstaller build.spec
+pyinstaller finstruct.spec
 ```
 
-Output: `dist\CA_Compliance_Reminder\CA_Compliance_Reminder.exe`
+Output: `dist\FinStruct\FinStruct.exe`
 
-Copy the entire `dist\CA_Compliance_Reminder\` folder to any Windows PC —
-no Python required.
+Copy the entire `dist\FinStruct\` folder to any Windows PC — no Python required.
+Log file (windowed .exe): `%APPDATA%\FinStruct\app.log`
 
 ---
 
-## Troubleshooting
+## Project Structure
 
-| Symptom | Fix |
+```
+Claude-project_Finstruct/
+├── finstruct_app.py            Entry point
+├── finstruct.spec              PyInstaller build spec
+├── requirements.txt            Python dependencies
+├── finstruct/
+│   ├── config.py               App constants, paths, theme tokens
+│   ├── core/
+│   │   ├── master_db.py        Schedule III + NCE mapping master
+│   │   ├── entity_types.py     Entity type enums / labels
+│   │   ├── fs_engine.py        FS generation engine
+│   │   ├── wtb_engine.py       Working TB aggregation
+│   │   ├── ppe_engine.py       Depreciation calculator (SLM/WDV)
+│   │   ├── notes_engine.py     Notes to Accounts generator
+│   │   ├── mapper.py           AI-assisted ledger mapper
+│   │   ├── tb_importer.py      CSV / XLSX TB importer
+│   │   ├── validator.py        TB validation rules
+│   │   └── rollover.py         FY rollover
+│   ├── data/
+│   │   ├── project_db.py       Per-project SQLite DB
+│   │   ├── settings_db.py      Global settings DB (recent projects)
+│   │   └── encryption.py       Fernet AES-128 for PII fields
+│   ├── export/
+│   │   ├── pdf_exporter.py     ReportLab PDF output
+│   │   ├── docx_exporter.py    python-docx Word output
+│   │   └── xlsx_exporter.py    openpyxl Excel output
+│   └── gui/
+│       ├── theme.py            Design tokens + widget factories
+│       ├── main_window.py      Root window, sidebar, menu
+│       ├── dashboard.py        Recent projects + New Project wizard
+│       ├── company_master.py   Step 1: Entity Setup
+│       ├── tb_import_view.py   Step 2: TB import
+│       ├── mapping_view.py     Step 3: Ledger mapping
+│       ├── wtb_view.py         Step 4: WTB review
+│       ├── ppe_view.py         Step 5: PPE register
+│       ├── fs_viewer.py        Step 6: FS viewer
+│       ├── notes_view.py       Step 7: Notes editor
+│       ├── report_editor.py    Step 8: Report editor
+│       └── export_dialog.py    Step 9: Export dialog
+└── docs/
+    ├── SRS_FRS.md
+    ├── DESIGN.md
+    └── USE_CASE.md
+```
+
+---
+
+## Dependencies
+
+| Package | Purpose |
 |---|---|
-| Only 3 tabs show on startup | Update to latest code — startup crash in Email Setup was fixed |
-| `ModuleNotFoundError: tkinter` | `sudo apt install python3-tk` (Ubuntu/Debian) |
-| SMTP Authentication Failed | Use an App Password, not your account password |
-| Gmail "Username/Password not accepted" | Enable 2-Step Verification before generating App Password |
-| Client not receiving emails | Ensure **Consent Given** is ticked for that client |
-| App doesn't auto-send on 1st | Open the app on the 1st; it does not run in the background |
-| Want a different auto-send day | Edit `REMINDER_SEND_DAY = 1` in `ca_reminder/config.py` |
+| `cryptography` | Fernet AES-128 encryption for PII fields |
+| `keyring` | Stores encryption key in OS credential store |
+| `openpyxl` | Read/write .xlsx Trial Balance and exports |
+| `reportlab` | PDF financial statement generation |
+| `python-docx` | Word document export |
+| `lxml` | XML processing (docx internals) |
+| `scikit-learn` | Fallback cosine-similarity ledger mapper |
+| `sentence-transformers` | AI-assisted ledger mapping (optional) |
+| `anthropic` | Claude API integration (optional) |
+
+`tkinter` and `sqlite3` ship with Python — no extra install needed.
 
 ---
 
-*CA Compliance Reminder v1.0 · Data encrypted · DPDP Act 2023 compliant*
+## Data & Security
+
+- Project data stored in `.finstruct` SQLite files (one file per client / FY)
+- PII fields (PAN, DIN, addresses, director names) encrypted with Fernet AES-128
+- Encryption key stored in Windows Credential Manager / macOS Keychain (file fallback)
+- No network calls except optional Claude API (user-configured)
+
+---
+
+*FinStruct v1.0 · ICAI Notified Formats · Companies Act 2013 · © 2026 rajacacs*
