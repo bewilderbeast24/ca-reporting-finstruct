@@ -93,15 +93,16 @@ class Mapper:
 
         # 3. TF-IDF
         best_code, best_conf, best_entry = self._tfidf_match(ledger_name)
+        best_source = "TFIDF"
 
         # 4. Sentence-BERT (if TF-IDF not confident enough)
         if best_conf < CONF_GREEN:
             sb_code, sb_conf, sb_entry = self._sbert_match(ledger_name)
             if sb_conf > best_conf:
                 best_code, best_conf, best_entry = sb_code, sb_conf, sb_entry
+                best_source = "SBERT"
 
-        return MappingResult(best_code or "", best_entry, best_conf,
-                             "TFIDF" if best_conf < CONF_GREEN else "TFIDF")
+        return MappingResult(best_code or "", best_entry, best_conf, best_source)
 
     def _tfidf_match(self, ledger: str) -> tuple[str | None, float, MappingEntry | None]:
         try:

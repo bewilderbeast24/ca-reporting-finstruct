@@ -547,7 +547,7 @@ class FSEngine:
         oca_cy = self._cy("TR011"); oca_py = self._py("TR011")
         lines.append(_line("IV.  Other Current Assets", oca_cy, oca_py, note=8, indent=1))
         tot_as_cy = fa_cy + inv_cy + cash_cy + oca_cy
-        tot_as_py = fa_py + inv_cy + cash_py + oca_py
+        tot_as_py = fa_py + inv_py + cash_py + oca_py
         lines.append(_grand("TOTAL", tot_as_cy, tot_as_py))
         return lines
 

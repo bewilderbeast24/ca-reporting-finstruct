@@ -346,16 +346,14 @@ class MainWindow:
         self._clear_content()
         self._highlight_step(6)
         from .notes_view import NotesView
+        from ..core.wtb_engine import aggregate_by_code, build_wtb_lines
         try:
             doc = self._build_fs_doc()
         except Exception as e:
             messagebox.showerror("Error", str(e)); return
-        from ..core.wtb_engine import aggregate_by_code, build_wtb_lines
         wtb_rows = self._db.get_wtb()
         raw_rows = self._db.get_raw_tb()
-        from ..core.wtb_engine import build_wtb_lines
         lines    = build_wtb_lines(wtb_rows, raw_rows)
-        from ..core.wtb_engine import aggregate_by_code
         totals   = aggregate_by_code(lines)
         ppe_data = [dict(r) for r in self._db.get_ppe()]
         for a in ppe_data:
