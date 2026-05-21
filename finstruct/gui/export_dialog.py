@@ -79,6 +79,22 @@ class ExportDialog(tk.Toplevel):
                        state="normal" if docx_enabled else "disabled").pack(anchor="w", padx=24, pady=3)
 
         ttk.Separator(self, orient="horizontal").pack(fill="x", padx=16, pady=8)
+
+        # Font selection
+        font_frame = ttk.Frame(self)
+        font_frame.pack(fill="x", padx=16, pady=4)
+        ttk.Label(font_frame, text="Font:").pack(side="left", padx=4)
+        self._font_var = tk.StringVar(value="Calibri")
+        font_combo = ttk.Combobox(
+            font_frame,
+            textvariable=self._font_var,
+            values=["Aptos", "Aptos Narrow", "Calibri", "Cambria", "Arial",
+                   "Times New Roman", "Tahoma", "Verdana", "Segoe UI"],
+            state="readonly",
+            width=20
+        )
+        font_combo.pack(side="left", padx=4)
+
         ttk.Checkbutton(self, text="Mark as DRAFT (watermark on PDF)",
                         variable=self._is_draft).pack(anchor="w", padx=24, pady=2)
 
