@@ -197,7 +197,7 @@ class FSEngine:
         lines.append(_line("1.  Non-Current Assets", 0, 0, indent=1, row_type="SECTION"))
         ppe_gross = self._cy("AS001") + self._cy("AS004")
         ppe_dep   = self._cy("AS002") + self._cy("AS005")
-        ppe_cwip  = self._cy("AS003")
+        ppe_cwip  = self._cy("AS003")  # CWIP is not depreciated; added after net block calc
         ppe_net   = ppe_gross - ppe_dep + ppe_cwip
         ppe_gross_py = self._py("AS001") + self._py("AS004")
         ppe_dep_py   = self._py("AS002") + self._py("AS005")

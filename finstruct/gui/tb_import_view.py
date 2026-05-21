@@ -138,6 +138,8 @@ class TBImportView(ttk.Frame):
                       command=self._download_template).pack(side="left", padx=4)
         label(tmpl, "Fill in Excel, then import back here.",
               style="Muted.TLabel").pack(side="left", padx=6)
+        secondary_btn(tmpl, "🔗  Connect Zoho Books",
+                      command=self._zoho_connect).pack(side="right", padx=4)
 
         # File picker
         pick = ttk.Frame(self)
@@ -374,3 +376,7 @@ class TBImportView(ttk.Frame):
         self._msg.configure(state="normal")
         self._msg.delete("1.0", "end")
         self._msg.configure(state="disabled")
+
+    def _zoho_connect(self):
+        from .zoho_connect_dialog import ZohoConnectDialog
+        ZohoConnectDialog(self, self._db)

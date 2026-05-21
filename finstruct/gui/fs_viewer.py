@@ -54,6 +54,7 @@ class FSViewer(ttk.Frame):
         self._nb = ttk.Notebook(self)
         self._nb.pack(fill="both", expand=True, padx=8, pady=4)
         self._populate_tabs()
+        self._build_signatory_panel()
 
     def _populate_tabs(self):
         nb = self._nb
@@ -161,3 +162,59 @@ class FSViewer(ttk.Frame):
     def _go_notes(self):
         if self._on_proceed:
             self._on_proceed()
+
+    def _build_signatory_panel(self):
+        """Collapsible signatory summary panel at the bottom of the viewer."""
+        self._sig_visible = tk.BooleanVar(value=False)
+
+        toggle = ttk.Frame(self)
+        toggle.pack(fill="x", padx=8, pady=(0, 2))
+        ttk.Checkbutton(toggle, text="▼  Signing Details",
+                        variable=self._sig_visible,
+                        command=self._toggle_signatory,
+                        style="TCheckbutton").pack(side="left")
+        ttk.Button(toggle, text="Edit", width=5,
+                   command=self._edit_signatories).pack(side="left", padx=4)
+
+        self._sig_frame = ttk.Frame(self, relief="groove", borderwidth=1)
+        # Not packed yet — shown only when checkbox is ticked
+
+    def _toggle_signatory(self):
+        if self._sig_visible.get():
+            self._refresh_signatory()
+            self._sig_frame.pack(fill="x", padx=8, pady=(0, 4))
+        else:
+            self._sig_frame.pack_forget()
+
+    def _refresh_signatory(self):
+        for w in self._sig_frame.winfo_children():
+            w.destroy()
+        em = self._db.get_all_entity()
+        rows = [
+            ("Auditor Firm",    em.get("auditor_firm", "") + (f"  FRN: {em.get('auditor_frn','')}" if em.get("auditor_frn") else "")),
+            ("Partner",         em.get("auditor_partner", "") + (f"  M.No: {em.get('auditor_mrn','')}" if em.get("auditor_mrn") else "")),
+            ("Signing Place",   em.get("signing_place", "")),
+            ("Signing Date",    em.get("signing_date", "")),
+        ]
+        try:
+            dirs = [d for d in self._db.get_directors() if d["is_signing_auth"]]
+            for i, d in enumerate(dirs):
+                rows.insert(i + 2, (f"Director {i+1}", f"{d['name']}  {d['designation']}  DIN: {d['din'] or '—'}"))
+        except Exception:
+            pass
+
+        for key, val in rows:
+            r = ttk.Frame(self._sig_frame)
+            r.pack(fill="x", padx=8, pady=1)
+            ttk.Label(r, text=key + ":", width=18, anchor="w",
+                      font=(None, 9, "bold")).pack(side="left")
+            ttk.Label(r, text=val or "—", font=(None, 9)).pack(side="left")
+
+        if not any(v for _, v in rows):
+            ttk.Label(self._sig_frame,
+                      text="⚠ Signatory details not filled. Please complete Entity Setup (Step 1).",
+                      foreground="#C50F1F").pack(padx=8, pady=4)
+
+    def _edit_signatories(self):
+        messagebox.showinfo("Edit Signatories",
+                            "Go to Step 1 (Entity Setup) to update signatory details.")

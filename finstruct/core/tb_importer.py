@@ -246,6 +246,13 @@ def import_tally_xml(path: Path) -> ImportResult:
             net = _to_float(cl_bal_txt.replace("Dr.", "").replace("Cr.", "").replace("Dr", "").replace("CR", "").replace("Cr", ""))
             if not is_dr:
                 net = -net
+            # Parse prior-year opening balance (Tally exports OPENINGBALANCE element)
+            op_bal_txt = ledger.findtext("OPENINGBALANCE") or "0"
+            op_norm = op_bal_txt.lower().replace(".", "").strip()
+            op_is_dr = "dr" in op_norm
+            py_net = _to_float(op_bal_txt.replace("Dr.", "").replace("Cr.", "").replace("Dr", "").replace("CR", "").replace("Cr", ""))
+            if not op_is_dr:
+                py_net = -py_net
             if name:
                 result.rows.append({
                     "ledger_name": name,
@@ -253,7 +260,7 @@ def import_tally_xml(path: Path) -> ImportResult:
                     "cy_debit":    net if net >= 0 else 0,
                     "cy_credit":   abs(net) if net < 0 else 0,
                     "cy_net":      net,
-                    "py_net":      0.0,
+                    "py_net":      py_net,
                     "source":      "XML",
                 })
     except Exception as e:
