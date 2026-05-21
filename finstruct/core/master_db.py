@@ -160,6 +160,8 @@ MASTER: list[MappingEntry] = [
     _e("PL037", CO,  "Expenses", "Other Expenses", "GST / Taxes & Duties",                                      "PL", "DR_POSITIVE", 29),
     _e("PL038", CO,  "Expenses", "Other Expenses", "Bad Debts Written Off",                                     "PL", "DR_POSITIVE", 29),
     _e("PL039", CO,  "Expenses", "Other Expenses", "Miscellaneous Expenses",                                    "PL", "DR_POSITIVE", 29),
+    _e("PL021A", CO, "Expenses", "Employee Benefit Expenses", "Commission to Employees",                        "PL", "DR_POSITIVE", 26),
+    _e("PL021B", CO, "Expenses", "Employee Benefit Expenses", "Leave Encashment Expense",                       "PL", "DR_POSITIVE", 26),
     _e("PL040", CO,  "Tax", "Current Tax", "Current Income Tax",                                                "PL", "DR_POSITIVE"),
     _e("PL041", CO,  "Tax", "Deferred Tax", "Deferred Tax (Charge) / Credit",                                  "PL", "DR_POSITIVE"),
 
@@ -182,6 +184,18 @@ MASTER: list[MappingEntry] = [
     _e("LL015", ["LLP"], "Current Assets", "Debtors", "Trade Receivables",                                      "BS", "DR_POSITIVE", 11),
     _e("LL016", ["LLP"], "Current Assets", "Loans & Advances", "Loans & Advances",                              "BS", "DR_POSITIVE", 12),
     _e("LL017", ["LLP"], "Current Assets", "Other Current Assets", "Other Current Assets",                      "BS", "DR_POSITIVE", 13),
+
+    # LLP P&L (ICAI Guidance Note — LLP Financial Statements)
+    _e("LL018", ["LLP"], "Revenue", "Revenue from Operations", "Sale of Products / Services",                   "PL", "CR_POSITIVE", 14),
+    _e("LL019", ["LLP"], "Revenue", "Other Income", "Interest & Other Income",                                  "PL", "CR_POSITIVE", 15),
+    _e("LL020", ["LLP"], "Expenses", "Cost of Materials / Purchases", "Cost of Goods Sold / Purchases",         "PL", "DR_POSITIVE", 16),
+    _e("LL021", ["LLP"], "Expenses", "Changes in Inventories", "Inventory Change (Opening – Closing)",          "PL", "DR_POSITIVE", 16),
+    _e("LL022", ["LLP"], "Expenses", "Employee Benefit Expenses", "Salaries, Wages & Staff Costs",              "PL", "DR_POSITIVE", 17),
+    _e("LL023", ["LLP"], "Expenses", "Partners' Remuneration", "Remuneration to Designated Partners",           "PL", "DR_POSITIVE", 18),
+    _e("LL024", ["LLP"], "Expenses", "Finance Costs", "Interest & Finance Charges",                             "PL", "DR_POSITIVE", 19),
+    _e("LL025", ["LLP"], "Expenses", "Depreciation & Amortisation", "Depreciation & Amortisation",             "PL", "DR_POSITIVE", 20),
+    _e("LL026", ["LLP"], "Expenses", "Other Expenses", "Administrative & Other Expenses",                       "PL", "DR_POSITIVE", 21),
+    _e("LL027", ["LLP"], "Tax",      "Provision for Tax", "Income Tax Provision",                               "PL", "DR_POSITIVE"),
 
     # ─── NCE PROP / PART FORMAT ───────────────────────────────────────────
 
@@ -217,6 +231,23 @@ MASTER: list[MappingEntry] = [
     _e("NP008", NCE,  "Expenses", "Depreciation", "Depreciation",                                                "PL", "DR_POSITIVE", 20),
     _e("NP009", NCE,  "Expenses", "Other Expenses", "Administrative & Other Expenses",                           "PL", "DR_POSITIVE", 21),
 
+    # PROP-specific expanded BS — Capital Work-in-Progress and Intangibles as separate entries
+    _e("PR001", ["PROP"], "Fixed Assets", "Capital Work-in-Progress", "Capital Work-in-Progress",               "BS", "DR_POSITIVE", 10),
+    _e("PR002", ["PROP"], "Fixed Assets", "Intangible Assets", "Intangible Assets (Net Block)",                  "BS", "DR_POSITIVE", 10),
+    _e("PR003", ["PROP"], "Non-Current Assets", "Long-Term Loans & Advances", "Security Deposits & Advances",   "BS", "DR_POSITIVE", 13),
+    _e("PR004", ["PROP"], "Non-Current Assets", "Other Non-Current Assets", "Other Non-Current Assets",         "BS", "DR_POSITIVE", 14),
+    _e("PR005", ["PROP"], "Current Liabilities", "Long-Term Borrowings", "Long-Term Borrowings (secured)",      "BS", "CR_POSITIVE", 4),
+    _e("PR006", ["PROP"], "Current Liabilities", "Long-Term Provisions", "Long-Term Provisions",                "BS", "CR_POSITIVE", 5),
+
+    # PART-specific capital accounts (separate from generic NC001 capital)
+    _e("PT001", ["PART"], "Partners' Capital", "Partners' Fixed Capital", "Fixed Capital Accounts",             "BS", "CR_POSITIVE", 2),
+    _e("PT002", ["PART"], "Partners' Capital", "Partners' Current Account", "Current Accounts (Fluctuating)",   "BS", "CR_POSITIVE", 3),
+    _e("PT003", ["PART"], "Partners' Capital", "Partners' Capital Accounts", "Capital Accounts (Fluctuating)",  "BS", "CR_POSITIVE", 2),
+    _e("PT004", ["PART"], "Appropriation", "Partners' Remuneration", "Remuneration to Partners (Sec 40b)",      "PL", "DR_POSITIVE", 25),
+    _e("PT005", ["PART"], "Appropriation", "Interest on Capital", "Interest on Partners' Capital",              "PL", "DR_POSITIVE", 29),
+    _e("PT006", ["PART"], "Appropriation", "Profit Appropriation", "Share of Profit per Partner",               "PL", "DR_POSITIVE", 29),
+    _e("PT007", ["PART"], "Tax", "Provision for Income Tax", "Current Tax (@ 30% + surcharge)",                 "PL", "DR_POSITIVE", 10),
+
     # ─── AOP / RWA FORMAT ──────────────────────────────────────────────────
 
     _e("AO001", AOP, "Capital / Members Fund", "Capital Fund", "Members' Capital Fund (Opening)",                "BS", "CR_POSITIVE", 1),
@@ -244,6 +275,16 @@ MASTER: list[MappingEntry] = [
     _e("AE003", AOP, "Expenditure", "Administrative Expenses", "Administrative & Other Expenses",                "IE", "DR_POSITIVE", 17),
     _e("AE004", AOP, "Expenditure", "Depreciation", "Depreciation",                                             "IE", "DR_POSITIVE", 18),
 
+    # AOP expanded I&E sub-lines
+    _e("AI010", AOP, "Income", "Maintenance Income", "Car Parking / Other Charges",                             "IE", "CR_POSITIVE", 15),
+    _e("AI011", AOP, "Income", "Maintenance Income", "Sub-letting / Hall Rental Income",                        "IE", "CR_POSITIVE", 15),
+    _e("AE010", AOP, "Expenditure", "Establishment Expenses", "Security & Housekeeping",                        "IE", "DR_POSITIVE", 17),
+    _e("AE011", AOP, "Expenditure", "Establishment Expenses", "Electricity – Common Areas",                     "IE", "DR_POSITIVE", 17),
+    _e("AE012", AOP, "Expenditure", "Maintenance Expenses", "Lift / Pump Maintenance",                          "IE", "DR_POSITIVE", 18),
+    _e("AE013", AOP, "Expenditure", "Maintenance Expenses", "Civil Repairs & Upkeep",                           "IE", "DR_POSITIVE", 18),
+    _e("AE014", AOP, "Expenditure", "Administrative Expenses", "Printing, Postage & Stationery",                "IE", "DR_POSITIVE", 19),
+    _e("AE015", AOP, "Expenditure", "Administrative Expenses", "Audit Fees",                                    "IE", "DR_POSITIVE", 19),
+
     # ─── TRUST / NPO FORMAT ───────────────────────────────────────────────
 
     _e("TR001", NPO, "Corpus Fund", "Corpus Fund", "Corpus Contributions",                                       "BS", "CR_POSITIVE", 1),
@@ -267,6 +308,30 @@ MASTER: list[MappingEntry] = [
     _e("TE002", NPO, "Expenditure", "Administrative Expenses", "Staff Costs",                                    "IE", "DR_POSITIVE", 13),
     _e("TE003", NPO, "Expenditure", "Administrative Expenses", "Administrative & Office Expenses",               "IE", "DR_POSITIVE", 13),
     _e("TE004", NPO, "Expenditure", "Depreciation", "Depreciation",                                             "IE", "DR_POSITIVE", 14),
+
+    # NPO/Trust expanded BS codes
+    _e("TR020", NPO, "Capital Grants", "Capital Grants Received", "Capital Grants – Deferred (Govt / CSR)",     "BS", "CR_POSITIVE", 5),
+    _e("TR021", NPO, "Investments", "Corpus Investments", "Corpus Investments – FDs / Bonds / Equity",          "BS", "DR_POSITIVE", 10),
+    _e("TR022", NPO, "Investments", "Other Investments", "Other Investments (non-corpus)",                       "BS", "DR_POSITIVE", 11),
+    _e("TR023", NPO, "Current Assets", "Cash & Bank", "FCRA Bank Account (separate)",                           "BS", "DR_POSITIVE", 12),
+    _e("TR024", NPO, "Current Assets", "Debtors", "Grants Receivable",                                          "BS", "DR_POSITIVE", 13),
+    _e("TR025", NPO, "Current Assets", "Loans & Advances", "Loans & Advances – Programme",                      "BS", "DR_POSITIVE", 14),
+    _e("TR026", NPO, "Loans", "Secured Loans", "Secured Loans – Banks",                                         "BS", "CR_POSITIVE", 6),
+
+    # NPO/Trust expanded I&E codes
+    _e("TI010", NPO, "Income", "Revenue Grants", "Government / State Grants",                                   "IE", "CR_POSITIVE", 16),
+    _e("TI011", NPO, "Income", "Revenue Grants", "CSR Funding from Corporates",                                  "IE", "CR_POSITIVE", 16),
+    _e("TI012", NPO, "Income", "Revenue Grants", "Foreign Grants (FCRA)",                                       "IE", "CR_POSITIVE", 16),
+    _e("TI013", NPO, "Income", "Donations", "Corpus Donations",                                                  "IE", "CR_POSITIVE", 17),
+    _e("TI014", NPO, "Income", "Donations", "General Donations",                                                 "IE", "CR_POSITIVE", 17),
+    _e("TI015", NPO, "Income", "Programme Income", "Fees / Training / Course Charges",                          "IE", "CR_POSITIVE", 18),
+    _e("TI016", NPO, "Income", "Programme Income", "Subscriptions & Membership Fees",                           "IE", "CR_POSITIVE", 18),
+    _e("TE010", NPO, "Expenditure", "Programme Expenses", "Programme / Project Direct Expenses",                 "IE", "DR_POSITIVE", 21),
+    _e("TE011", NPO, "Expenditure", "Programme Expenses", "Field Activities & Beneficiary Costs",                "IE", "DR_POSITIVE", 21),
+    _e("TE012", NPO, "Expenditure", "Establishment Expenses", "Staff Salaries & Allowances",                    "IE", "DR_POSITIVE", 20),
+    _e("TE013", NPO, "Expenditure", "Establishment Expenses", "PF / ESI / Gratuity",                            "IE", "DR_POSITIVE", 20),
+    _e("TE014", NPO, "Expenditure", "Administrative Expenses", "Rent, Electricity & Utilities",                  "IE", "DR_POSITIVE", 22),
+    _e("TE015", NPO, "Expenditure", "Administrative Expenses", "Audit Fees & Professional Charges",             "IE", "DR_POSITIVE", 22),
 ]
 
 

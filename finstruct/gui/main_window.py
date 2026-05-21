@@ -318,12 +318,30 @@ class MainWindow:
         self._clear_content()
         self._highlight_step(5)
         try:
-            doc = self._build_fs_doc()
+            doc, engine = self._build_fs_doc()
         except Exception as e:
             messagebox.showerror("FS Error", str(e)); return
+
+        et = self._db.get_meta("entity_type") or "COMPANY"
+        small = False
+        if et == "COMPANY":
+            try:
+                from ..core.validator import is_small_company
+                em = self._db.get_all_entity()
+                paid_up = float(em.get("paid_up_capital") or 0)
+                turnover = float(em.get("turnover") or 0)
+                small = is_small_company(paid_up, turnover)
+            except Exception:
+                pass
+
+        def _rebuild_cf(include: bool):
+            return engine.generate(include_cf=include).cf
+
         from .fs_viewer import FSViewer
         f = FSViewer(self._content, doc, self._db,
-                     on_proceed=lambda: self._go_notes())
+                     on_proceed=lambda: self._go_notes(),
+                     rebuild_cf=_rebuild_cf,
+                     is_small_company=small)
         f.pack(fill="both", expand=True)
         self._status_var.set("Financial Statements generated.")
 
@@ -340,7 +358,7 @@ class MainWindow:
         et       = self._db.get_meta("entity_type") or "COMPANY"
         div      = int(self._db.get_meta("rounding_divisor") or "1")
         engine   = FSEngine(et, totals, em, fy, div)
-        return engine.generate()
+        return engine.generate(), engine
 
     def _go_notes(self):
         self._clear_content()
@@ -348,7 +366,7 @@ class MainWindow:
         from .notes_view import NotesView
         from ..core.wtb_engine import aggregate_by_code, build_wtb_lines
         try:
-            doc = self._build_fs_doc()
+            doc, _ = self._build_fs_doc()
         except Exception as e:
             messagebox.showerror("Error", str(e)); return
         wtb_rows = self._db.get_wtb()

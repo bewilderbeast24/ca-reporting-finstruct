@@ -71,5 +71,5 @@ PPE_USEFUL_LIFE = {
 PPE_IT_RATES = {
     "Buildings": 10, "Plant & Machinery": 15, "Furniture & Fixtures": 10,
     "Vehicles": 15, "Office Equipment": 15, "Computers & Peripherals": 40,
-    "Electrical Installations": 10, "Intangible – Software": 25,
+    "Electrical Installations": 10, "Intangible – Software": 40,
 }

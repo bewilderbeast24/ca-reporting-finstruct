@@ -104,10 +104,37 @@ class CompanyMasterForm(ttk.Frame):
                       style="Sec.TLabel").grid(row=r, column=0, columnspan=2,
                                                sticky="ew", pady=(4, 2), padx=6)
             r += 1
-            for i in range(1, 3):
-                self._field(inner, r, f"dir{i}_name",  f"Director {i} Name"); r += 1
-                self._field(inner, r, f"dir{i}_desig", f"Director {i} Designation"); r += 1
-                self._field(inner, r, f"dir{i}_din",   f"Director {i} DIN"); r += 1
+
+            # Directors Treeview panel
+            dir_frame = ttk.Frame(inner)
+            dir_frame.grid(row=r, column=0, columnspan=2, sticky="ew", padx=6, pady=4)
+            r += 1
+
+            dir_cols = ("name", "designation", "din", "signs")
+            self._dir_tree = ttk.Treeview(dir_frame, columns=dir_cols,
+                                          show="headings", height=5)
+            self._dir_tree.heading("name",        text="Name")
+            self._dir_tree.heading("designation", text="Designation")
+            self._dir_tree.heading("din",         text="DIN")
+            self._dir_tree.heading("signs",       text="Signs FS?")
+            self._dir_tree.column("name",        width=180)
+            self._dir_tree.column("designation", width=130)
+            self._dir_tree.column("din",         width=90)
+            self._dir_tree.column("signs",       width=70, anchor="center")
+            self._dir_tree.pack(side="left", fill="x", expand=True)
+
+            dir_sb = ttk.Scrollbar(dir_frame, orient="vertical",
+                                   command=self._dir_tree.yview)
+            self._dir_tree.configure(yscrollcommand=dir_sb.set)
+            dir_sb.pack(side="left", fill="y")
+
+            dir_btns = ttk.Frame(inner)
+            dir_btns.grid(row=r, column=0, columnspan=2, sticky="w", padx=6, pady=(0,4))
+            r += 1
+            ttk.Button(dir_btns, text="➕ Add",    command=self._dir_add).pack(side="left", padx=2)
+            ttk.Button(dir_btns, text="✏ Edit",   command=self._dir_edit).pack(side="left", padx=2)
+            ttk.Button(dir_btns, text="🗑 Remove", command=self._dir_remove).pack(side="left", padx=2)
+
             self._field(inner, r, "cfo_name", "CFO Name"); r += 1
             self._field(inner, r, "cs_name",  "Company Secretary Name"); r += 1
             self._field(inner, r, "cs_memno", "CS Membership No."); r += 1
@@ -140,6 +167,7 @@ class CompanyMasterForm(ttk.Frame):
         data = self._db.get_all_entity()
         for key, var in self._vars.items():
             var.set(data.get(key, ""))
+        self._load_directors()
 
     def _save(self):
         data = {k: v.get().strip() for k, v in self._vars.items()}
@@ -165,3 +193,89 @@ class CompanyMasterForm(ttk.Frame):
         messagebox.showinfo("Saved", "Entity master saved successfully.")
         if self._on_save:
             self._on_save(data)
+
+    def _load_directors(self):
+        if not hasattr(self, '_dir_tree'):
+            return
+        for item in self._dir_tree.get_children():
+            self._dir_tree.delete(item)
+        try:
+            for d in self._db.get_directors():
+                signs = "✔ Yes" if d["is_signing_auth"] else "No"
+                self._dir_tree.insert("", "end", iid=str(d["id"]),
+                                      values=(d["name"], d["designation"],
+                                              d["din"] or "", signs))
+        except Exception:
+            pass
+
+    def _dir_add(self):
+        self._dir_dialog(None)
+
+    def _dir_edit(self):
+        sel = self._dir_tree.selection()
+        if not sel:
+            from tkinter import messagebox
+            messagebox.showinfo("Select", "Select a director to edit.")
+            return
+        dir_id = int(sel[0])
+        rows = self._db.get_directors()
+        d = next((dict(r) for r in rows if r["id"] == dir_id), None)
+        if d:
+            self._dir_dialog(d)
+
+    def _dir_remove(self):
+        sel = self._dir_tree.selection()
+        if not sel:
+            return
+        from tkinter import messagebox
+        if messagebox.askyesno("Remove", "Remove selected director?"):
+            self._db.delete_director(int(sel[0]))
+            self._load_directors()
+
+    def _dir_dialog(self, d: dict | None):
+        from tkinter import Toplevel, StringVar, BooleanVar, messagebox
+        top = Toplevel(self)
+        top.title("Add Director" if d is None else "Edit Director")
+        top.resizable(False, False)
+        top.grab_set()
+
+        fields = [
+            ("name",        "Name *",        d["name"]        if d else ""),
+            ("designation", "Designation",   d["designation"] if d else "Director"),
+            ("din",         "DIN",           d["din"]         if d else ""),
+            ("pan",         "PAN",           d["pan"]         if d else ""),
+        ]
+        vars_ = {}
+        for i, (key, lbl, val) in enumerate(fields):
+            ttk.Label(top, text=lbl).grid(row=i, column=0, padx=8, pady=4, sticky="w")
+            v = StringVar(value=val)
+            vars_[key] = v
+            ttk.Entry(top, textvariable=v, width=30).grid(row=i, column=1, padx=8, pady=4)
+
+        signs_var = BooleanVar(value=bool(d["is_signing_auth"]) if d else True)
+        ttk.Checkbutton(top, text="Signs Financial Statements?",
+                        variable=signs_var).grid(row=len(fields), column=0,
+                                                 columnspan=2, padx=8, pady=4)
+
+        def _ok():
+            name = vars_["name"].get().strip()
+            if not name:
+                messagebox.showerror("Required", "Name is required.")
+                return
+            rec = {
+                "name":            name,
+                "designation":     vars_["designation"].get().strip() or "Director",
+                "din":             vars_["din"].get().strip(),
+                "pan":             vars_["pan"].get().strip(),
+                "is_signing_auth": int(signs_var.get()),
+                "sort_order":      d.get("sort_order", 0) if d else 0,
+            }
+            if d:
+                rec["id"] = d["id"]
+            self._db.upsert_director(rec)
+            self._load_directors()
+            top.destroy()
+
+        btn_row = len(fields) + 1
+        ttk.Button(top, text="Save", command=_ok).grid(row=btn_row, column=0, padx=8, pady=8)
+        ttk.Button(top, text="Cancel", command=top.destroy).grid(row=btn_row, column=1, padx=8, pady=8)

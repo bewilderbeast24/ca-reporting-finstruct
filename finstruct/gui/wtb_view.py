@@ -20,7 +20,7 @@ class WTBView(ttk.Frame):
     def _build(self):
         top = ttk.Frame(self)
         top.pack(fill="x", padx=8, pady=6)
-        label(top, "4.  Working Trial Balance", style="Sec.TLabel").pack(side="left")
+        label(top, "4.  Working Trial Balance / Mapped TB", style="Sec.TLabel").pack(side="left")
         secondary_btn(top, "Add Adjustment Entry", command=self._add_adj).pack(side="left", padx=8)
         primary_btn(top, "✔ Proceed to PPE →", command=self._proceed).pack(side="right", padx=4)
         primary_btn(top, "Validate F9", command=self._validate).pack(side="right", padx=4)
@@ -53,6 +53,17 @@ class WTBView(ttk.Frame):
     def _load(self):
         wtb_rows = self._db.get_wtb()
         raw_rows = self._db.get_raw_tb()
+
+        # Validate WTB has data
+        if not raw_rows:
+            self._grid.load_rows([])
+            self._status_var.set("⚠ No Trial Balance data found. Please import TB first (Step 2).")
+            self._adj_list.configure(state="normal")
+            self._adj_list.delete("1.0", "end")
+            self._adj_list.insert("end", "(No adjustments)")
+            self._adj_list.configure(state="disabled")
+            return
+
         lines    = build_wtb_lines(wtb_rows, raw_rows)
         from ..core.master_db import get_lookup_map
         lm = get_lookup_map()

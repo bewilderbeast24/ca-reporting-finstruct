@@ -18,15 +18,44 @@ def _fmt(v):
 class NotesView(ttk.Frame):
     def __init__(self, parent, notes: list[Note], db):
         super().__init__(parent)
-        self._notes = notes
+        self._notes = notes or []
         self._db    = db
+        # Derive FY labels
+        self._fy_labels = self._derive_fy_labels()
         self._build()
+
+    def _derive_fy_labels(self) -> tuple[str, str]:
+        """Derive FY labels from metadata."""
+        meta = self._db.get_all_meta()
+        fy = meta.get("financial_year", "")
+        try:
+            fy_parts = fy.split("-")
+            fy_start_cy = int(fy_parts[0])
+            fy_end_cy = int(fy_parts[1])
+            fy_start_py = fy_start_cy - 1
+            fy_end_py = fy_end_cy - 1
+            return (f"Rs. FY {fy_start_cy}-{fy_end_cy:02d}",
+                   f"Rs. FY {fy_start_py}-{fy_end_py:02d}")
+        except (IndexError, ValueError):
+            return ("Rs. Current Year", "Rs. Previous Year")
 
     def _build(self):
         top = ttk.Frame(self)
         top.pack(fill="x", padx=8, pady=6)
-        label(top, "7.  Notes to Accounts", style="Sec.TLabel").pack(side="left")
+        label(top, "7.  Notes to Financial Statements", style="Sec.TLabel").pack(side="left")
         primary_btn(top, "Save All Note Edits", command=self._save_all).pack(side="right", padx=4)
+
+        # Validation: check if notes exist
+        if not self._notes:
+            status_frame = ttk.Frame(self)
+            status_frame.pack(fill="both", expand=True, padx=16, pady=16)
+            ttk.Label(status_frame,
+                     text="⚠  No notes generated yet.\n\nEnsure that:\n"
+                          "1. Trial Balance has been imported (Step 2)\n"
+                          "2. Financial Statements are generated (Step 6)\n"
+                          "3. Working TB is balanced",
+                     style="Muted.TLabel", wraplength=400, justify="left").pack(anchor="w", pady=20)
+            return
 
         nb = ttk.Notebook(self)
         nb.pack(fill="both", expand=True, padx=8, pady=4)
@@ -40,10 +69,11 @@ class NotesView(ttk.Frame):
     def _build_note_tab(self, parent, note: Note):
         ttk.Label(parent, text=f"Note {note.number}: {note.title}",
                   style="Sec.TLabel").pack(anchor="w", padx=8, pady=4)
+        cy_label, py_label = self._fy_labels
         cols = [
             ("label", "Particulars",    360, "w"),
-            ("cy",    "Current Year ₹", 150, "e"),
-            ("py",    "Prev Year ₹",    150, "e"),
+            ("cy",    cy_label,         150, "e"),
+            ("py",    py_label,         150, "e"),
         ]
         grid = EditableGrid(parent, columns=cols,
                             on_cell_change=None,

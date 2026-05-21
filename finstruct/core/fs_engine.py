@@ -93,7 +93,7 @@ class FSEngine:
     def _sum_py(self, codes: list[str]) -> float:
         return round(sum(self._py(c) for c in codes), 2)
 
-    def generate(self) -> FSDocument:
+    def generate(self, include_cf: bool = True) -> FSDocument:
         doc = FSDocument(self._etype, self._fy, self._master, self._div)
         if self._etype in ("COMPANY", "SEC8"):
             doc.bs = self._company_bs()
@@ -101,6 +101,8 @@ class FSEngine:
                 doc.ie = self._aop_ie()
             else:
                 doc.pl = self._company_pl()
+            if include_cf:
+                doc.cf = self._company_cf()
         elif self._etype == "LLP":
             doc.bs = self._llp_bs()
             doc.pl = self._nce_pl(["LL"])
@@ -127,7 +129,7 @@ class FSEngine:
         lines: list[FSLine] = []
 
         # Header
-        lines += [_hdr("BALANCE SHEET"), _blank()]
+        lines += [_hdr("BALANCE SHEET")]
 
         # ── EQUITY & LIABILITIES ──────────────────────────────────────────
         lines.append(_sec("I.  EQUITY AND LIABILITIES"))
@@ -145,7 +147,6 @@ class FSEngine:
         tot_sf_cy = sc_cy + rs_cy + sam_cy
         tot_sf_py = sc_py + rs_py + sam_py
         lines.append(_tot("    Sub-total — Shareholders' Funds (A)", tot_sf_cy, tot_sf_py))
-        lines.append(_blank())
 
         # Non-Current Liabilities
         lines.append(_line("2.  Non-Current Liabilities", 0, 0, indent=1, row_type="SECTION"))
@@ -162,7 +163,6 @@ class FSEngine:
         tot_ncl_cy = ltb_cy + dtl_cy + otl_cy + ltp_cy
         tot_ncl_py = ltb_py + dtl_py + otl_py + ltp_py
         lines.append(_tot("    Sub-total — Non-Current Liabilities (B)", tot_ncl_cy, tot_ncl_py))
-        lines.append(_blank())
 
         # Current Liabilities
         lines.append(_line("3.  Current Liabilities", 0, 0, indent=1, row_type="SECTION"))
@@ -181,12 +181,10 @@ class FSEngine:
         tot_cl_cy = stb_cy + tp_cy + ocl_cy + stp_cy
         tot_cl_py = stb_py + tp_py + ocl_py + stp_py
         lines.append(_tot("    Sub-total — Current Liabilities (C)", tot_cl_cy, tot_cl_py))
-        lines.append(_blank())
 
         tot_el_cy = tot_sf_cy + tot_ncl_cy + tot_cl_cy
         tot_el_py = tot_sf_py + tot_ncl_py + tot_cl_py
         lines.append(_grand("TOTAL — EQUITY AND LIABILITIES (A+B+C)", tot_el_cy, tot_el_py))
-        lines.append(_blank())
 
         # ── ASSETS ────────────────────────────────────────────────────────
         lines.append(_sec("II.  ASSETS"))
@@ -195,7 +193,7 @@ class FSEngine:
         lines.append(_line("1.  Non-Current Assets", 0, 0, indent=1, row_type="SECTION"))
         ppe_gross = self._cy("AS001") + self._cy("AS004")
         ppe_dep   = self._cy("AS002") + self._cy("AS005")
-        ppe_cwip  = self._cy("AS003")
+        ppe_cwip  = self._cy("AS003")  # CWIP is not depreciated; added after net block calc
         ppe_net   = ppe_gross - ppe_dep + ppe_cwip
         ppe_gross_py = self._py("AS001") + self._py("AS004")
         ppe_dep_py   = self._py("AS002") + self._py("AS005")
@@ -216,7 +214,6 @@ class FSEngine:
         tot_nca_cy = ppe_net + nci_cy + dta_cy + ltla_cy + onca_cy
         tot_nca_py = ppe_net_py + nci_py + dta_py + ltla_py + onca_py
         lines.append(_tot("    Sub-total — Non-Current Assets (D)", tot_nca_cy, tot_nca_py))
-        lines.append(_blank())
 
         # Current Assets
         lines.append(_line("2.  Current Assets", 0, 0, indent=1, row_type="SECTION"))
@@ -238,7 +235,6 @@ class FSEngine:
         tot_ca_cy = inv_cy + tr_cy + cash_cy + stla_cy + oca_cy
         tot_ca_py = inv_py + tr_py + cash_py + stla_py + oca_py
         lines.append(_tot("    Sub-total — Current Assets (E)", tot_ca_cy, tot_ca_py))
-        lines.append(_blank())
 
         tot_as_cy = tot_nca_cy + tot_ca_cy
         tot_as_py = tot_nca_py + tot_ca_py
@@ -498,7 +494,7 @@ class FSEngine:
     def _aop_rp(self) -> list[FSLine]:
         lines = [_hdr("RECEIPT AND PAYMENT ACCOUNT"), _blank()]
         lines.append(_sec("RECEIPTS"))
-        cash_op_cy = 0.0  # opening balance from rollover
+        cash_op_cy = self._py("AO011") + self._py("AO012")
         lines.append(_line("Opening Balance (Cash & Bank)", cash_op_cy, 0, indent=1))
         mi_cy = self._cy("AI001")
         lines.append(_line("Maintenance Charges Received", mi_cy, 0, indent=1))
@@ -580,11 +576,13 @@ class FSEngine:
     def _trust_rp(self) -> list[FSLine]:
         lines = [_hdr("RECEIPT AND PAYMENT ACCOUNT"), _blank()]
         lines.append(_sec("RECEIPTS"))
+        cash_op_cy = self._py("TR009") + self._py("TR010")
+        lines.append(_line("Opening Balance (Cash & Bank)", cash_op_cy, 0, indent=1))
         don_cy = self._cy("TI001") + self._cy("TI002")
         lines.append(_line("Donations & Grants Received", don_cy, 0, indent=1))
         oi_cy = self._cy("TI003") + self._cy("TI004")
         lines.append(_line("Other Receipts", oi_cy, 0, indent=1))
-        tot_rec = don_cy + oi_cy
+        tot_rec = cash_op_cy + don_cy + oi_cy
         lines.append(_grand("TOTAL RECEIPTS", tot_rec, 0))
         lines.append(_blank())
         lines.append(_sec("PAYMENTS"))
@@ -595,4 +593,165 @@ class FSEngine:
         lines.append(_line("Closing Balance (Cash & Bank)", cash_cl, 0, indent=1))
         tot_pay = prog_cy + adm_cy + cash_cl
         lines.append(_grand("TOTAL PAYMENTS", tot_pay, 0))
+        return lines
+
+    # ─── CASH FLOW STATEMENT (Indirect Method — COMPANY / SEC8) ──────────────
+
+    def _company_cf(self) -> list[FSLine]:
+        lines = [_hdr("CASH FLOW STATEMENT"), _blank()]
+        lines.append(_line("(Prepared using the Indirect Method as per AS 3)", 0, 0,
+                           row_type="TEXT"))
+        lines.append(_blank())
+
+        # ── Recalculate PBT from P&L codes ──────────────────────────────────
+        rev_cy = self._sum_cy(["PL001","PL002","PL003"]) - self._cy("PL004")
+        rev_py = self._sum_py(["PL001","PL002","PL003"]) - self._py("PL004")
+        oi_cy  = self._sum_cy(["PL005","PL006","PL007","PL008","PL009"])
+        oi_py  = self._sum_py(["PL005","PL006","PL007","PL008","PL009"])
+        tot_rev_cy = rev_cy + oi_cy
+        tot_rev_py = rev_py + oi_py
+
+        cmc_cy = self._cy("PL010") + self._cy("PL011")
+        cmc_py = self._py("PL010") + self._py("PL011")
+        pur_cy = self._cy("PL012"); pur_py = self._py("PL012")
+        inv_ch_cy = self._sum_cy(["PL013","PL014"]) - self._sum_cy(["PL015","PL016"])
+        inv_ch_py = self._sum_py(["PL013","PL014"]) - self._sum_py(["PL015","PL016"])
+        emp_cy = self._sum_cy(["PL017","PL018","PL019","PL020","PL021"])
+        emp_py = self._sum_py(["PL017","PL018","PL019","PL020","PL021"])
+        fin_cy = self._sum_cy(["PL022","PL023","PL024"])
+        fin_py = self._sum_py(["PL022","PL023","PL024"])
+        dep_cy = self._cy("PL025") + self._cy("PL026")
+        dep_py = self._py("PL025") + self._py("PL026")
+        oe_cy  = self._sum_cy([f"PL{i:03d}" for i in range(27, 40)])
+        oe_py  = self._sum_py([f"PL{i:03d}" for i in range(27, 40)])
+        tot_exp_cy = cmc_cy + pur_cy + inv_ch_cy + emp_cy + fin_cy + dep_cy + oe_cy
+        tot_exp_py = cmc_py + pur_py + inv_ch_py + emp_py + fin_py + dep_py + oe_py
+
+        pbt_cy = tot_rev_cy - tot_exp_cy
+        pbt_py = tot_rev_py - tot_exp_py
+
+        # Interest income (PL007) removed from operating, added to investing
+        int_inc_cy = self._cy("PL007"); int_inc_py = self._py("PL007")
+
+        # ── A. OPERATING ACTIVITIES ──────────────────────────────────────────
+        lines.append(_sec("A.  CASH FLOW FROM OPERATING ACTIVITIES"))
+        lines.append(_line("Net Profit / (Loss) before Tax", pbt_cy, pbt_py, indent=1))
+        lines.append(_blank())
+        lines.append(_line("Adjustments for:", 0, 0, row_type="SECTION", indent=1))
+        lines.append(_line("  Add: Depreciation & Amortisation", dep_cy, dep_py, indent=2))
+        lines.append(_line("  Add: Finance Costs", fin_cy, fin_py, indent=2))
+        lines.append(_line("  Less: Interest Income (moved to Investing)", -int_inc_cy, -int_inc_py, indent=2))
+
+        adj_cy = dep_cy + fin_cy - int_inc_cy
+        adj_py = dep_py + fin_py - int_inc_py
+        lines.append(_tot("  Total Adjustments", adj_cy, adj_py))
+        lines.append(_blank())
+
+        # Working capital changes — asset increases = cash outflow (negative)
+        tr_cy  = self._cy("AS020") + self._cy("AS021") - self._cy("AS022")
+        tr_py  = self._py("AS020") + self._py("AS021") - self._py("AS022")
+        inv_ca_cy = self._sum_cy(["AS015","AS016","AS017","AS018","AS019"])
+        inv_ca_py = self._sum_py(["AS015","AS016","AS017","AS018","AS019"])
+        stla_cy = self._sum_cy(["AS027","AS028","AS029","AS030"])
+        stla_py = self._sum_py(["AS027","AS028","AS029","AS030"])
+        oca_cy  = self._cy("AS031") + self._cy("AS032") + self._cy("AS033")
+        oca_py  = self._py("AS031") + self._py("AS032") + self._py("AS033")
+
+        tp_cy   = self._cy("EL025") + self._cy("EL026")
+        tp_py   = self._py("EL025") + self._py("EL026")
+        ocl_cy  = self._sum_cy(["EL027","EL028","EL029","EL030","EL031"])
+        ocl_py  = self._sum_py(["EL027","EL028","EL029","EL030","EL031"])
+        stp_cy  = self._sum_cy(["EL032","EL033","EL034"])
+        stp_py  = self._sum_py(["EL032","EL033","EL034"])
+
+        d_tr_cy  = -(tr_cy - tr_py);    d_tr_py  = -(tr_py - 0)
+        d_inv_cy = -(inv_ca_cy - inv_ca_py); d_inv_py = -(inv_ca_py - 0)
+        d_stla_cy= -(stla_cy - stla_py); d_stla_py= -(stla_py - 0)
+        d_oca_cy = -(oca_cy - oca_py);  d_oca_py = -(oca_py - 0)
+        d_tp_cy  = tp_cy - tp_py;       d_tp_py  = tp_py - 0
+        d_ocl_cy = ocl_cy - ocl_py;     d_ocl_py = ocl_py - 0
+        d_stp_cy = stp_cy - stp_py;     d_stp_py = stp_py - 0
+
+        wc_cy = d_tr_cy + d_inv_cy + d_stla_cy + d_oca_cy + d_tp_cy + d_ocl_cy + d_stp_cy
+        wc_py = d_tr_py + d_inv_py + d_stla_py + d_oca_py + d_tp_py + d_ocl_py + d_stp_py
+
+        lines.append(_line("Changes in Working Capital:", 0, 0, row_type="SECTION", indent=1))
+        lines.append(_line("  (Increase)/Decrease in Trade Receivables",    d_tr_cy,  d_tr_py,  indent=2))
+        lines.append(_line("  (Increase)/Decrease in Inventories",          d_inv_cy, d_inv_py, indent=2))
+        lines.append(_line("  (Increase)/Decrease in Loans & Advances",     d_stla_cy,d_stla_py,indent=2))
+        lines.append(_line("  (Increase)/Decrease in Other Current Assets", d_oca_cy, d_oca_py, indent=2))
+        lines.append(_line("  Increase/(Decrease) in Trade Payables",       d_tp_cy,  d_tp_py,  indent=2))
+        lines.append(_line("  Increase/(Decrease) in Other Current Liab.",  d_ocl_cy, d_ocl_py, indent=2))
+        lines.append(_line("  Increase/(Decrease) in Short-term Provisions",d_stp_cy, d_stp_py, indent=2))
+        lines.append(_tot("  Net Working Capital Changes", wc_cy, wc_py))
+        lines.append(_blank())
+
+        tax_cy = self._cy("PL040"); tax_py = self._py("PL040")
+        lines.append(_line("Less: Direct Taxes Paid (Net of Refunds)", -tax_cy, -tax_py, indent=1))
+        cf_op_cy = round(pbt_cy + adj_cy + wc_cy - tax_cy, 2)
+        cf_op_py = round(pbt_py + adj_py + wc_py - tax_py, 2)
+        lines.append(_grand("Net Cash from/(used in) Operating Activities (A)", cf_op_cy, cf_op_py))
+        lines.append(_blank())
+
+        # ── B. INVESTING ACTIVITIES ──────────────────────────────────────────
+        lines.append(_sec("B.  CASH FLOW FROM INVESTING ACTIVITIES"))
+
+        # Capex: increase in gross fixed assets = outflow
+        ppe_gross_cy = self._cy("AS001") + self._cy("AS004")
+        ppe_gross_py = self._py("AS001") + self._py("AS004")
+        capex_cy = -(ppe_gross_cy - ppe_gross_py)
+        capex_py = -(ppe_gross_py - 0)
+
+        nci_cy = self._sum_cy(["AS006","AS007","AS008"])
+        nci_py = self._sum_py(["AS006","AS007","AS008"])
+        d_invest_cy = -(nci_cy - nci_py)
+        d_invest_py = -(nci_py - 0)
+
+        lines.append(_line("Purchase of Fixed Assets (including CWIP)", capex_cy, capex_py, indent=1))
+        lines.append(_line("Purchase/(Sale) of Investments (Net)",       d_invest_cy, d_invest_py, indent=1))
+        lines.append(_line("Interest Received",                          int_inc_cy, int_inc_py, indent=1))
+
+        cf_inv_cy = round(capex_cy + d_invest_cy + int_inc_cy, 2)
+        cf_inv_py = round(capex_py + d_invest_py + int_inc_py, 2)
+        lines.append(_grand("Net Cash from/(used in) Investing Activities (B)", cf_inv_cy, cf_inv_py))
+        lines.append(_blank())
+
+        # ── C. FINANCING ACTIVITIES ──────────────────────────────────────────
+        lines.append(_sec("C.  CASH FLOW FROM FINANCING ACTIVITIES"))
+
+        ltb_cy = self._sum_cy(["EL010","EL011","EL012","EL013","EL014","EL015"])
+        ltb_py = self._sum_py(["EL010","EL011","EL012","EL013","EL014","EL015"])
+        stb_cy = self._sum_cy(["EL020","EL021","EL022","EL023","EL024"])
+        stb_py = self._sum_py(["EL020","EL021","EL022","EL023","EL024"])
+        d_ltb_cy = ltb_cy - ltb_py
+        d_stb_cy = stb_cy - stb_py
+        div_cy  = self._cy("EL008"); div_py = self._py("EL008")
+
+        lines.append(_line("Proceeds from/(Repayment of) Long-term Borrowings (Net)",   d_ltb_cy, 0, indent=1))
+        lines.append(_line("Proceeds from/(Repayment of) Short-term Borrowings (Net)",  d_stb_cy, 0, indent=1))
+        lines.append(_line("Finance Costs Paid",                                         -fin_cy,  -fin_py, indent=1))
+        lines.append(_line("Dividends Paid",                                             -div_cy,  -div_py, indent=1))
+
+        cf_fin_cy = round(d_ltb_cy + d_stb_cy - fin_cy - div_cy, 2)
+        cf_fin_py = round(-fin_py - div_py, 2)
+        lines.append(_grand("Net Cash from/(used in) Financing Activities (C)", cf_fin_cy, cf_fin_py))
+        lines.append(_blank())
+
+        # ── RECONCILIATION ───────────────────────────────────────────────────
+        net_cf_cy = round(cf_op_cy + cf_inv_cy + cf_fin_cy, 2)
+        net_cf_py = round(cf_op_py + cf_inv_py + cf_fin_py, 2)
+        lines.append(_grand("Net Increase/(Decrease) in Cash (A+B+C)", net_cf_cy, net_cf_py))
+
+        cash_op_cy = self._sum_cy(["AS023","AS024","AS025","AS026"])  # closing from PY
+        cash_cl_cy = self._cy("AS023") + self._cy("AS024") + self._cy("AS025") + self._cy("AS026")
+        cash_op_val = self._sum_py(["AS023","AS024","AS025","AS026"])
+        lines.append(_line("Add: Opening Cash & Cash Equivalents", cash_op_val, 0, indent=1))
+        lines.append(_grand("Closing Cash & Cash Equivalents", cash_cl_cy, 0))
+
+        diff = round(net_cf_cy - (cash_cl_cy - cash_op_val), 2)
+        if abs(diff) > 0.5:
+            lines.append(_line(
+                f"⚠ CF reconciliation gap: {diff:,.2f} — check disposal proceeds & other adjustments",
+                0, 0, row_type="TEXT"
+            ))
         return lines

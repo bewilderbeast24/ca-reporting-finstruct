@@ -14,7 +14,7 @@ class EntityType(str, Enum):
 
 
 ENTITY_LABELS = {
-    EntityType.COMPANY: "Company (Companies Act 2013)",
+    EntityType.COMPANY: "Company under Companies Act 2013 Division I - Non IND AS",
     EntityType.LLP:     "Limited Liability Partnership",
     EntityType.PROP:    "Proprietorship",
     EntityType.PART:    "Partnership Firm",
