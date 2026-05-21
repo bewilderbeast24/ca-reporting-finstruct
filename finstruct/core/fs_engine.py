@@ -129,7 +129,7 @@ class FSEngine:
         lines: list[FSLine] = []
 
         # Header
-        lines += [_hdr("BALANCE SHEET"), _blank()]
+        lines += [_hdr("BALANCE SHEET")]
 
         # ── EQUITY & LIABILITIES ──────────────────────────────────────────
         lines.append(_sec("I.  EQUITY AND LIABILITIES"))
@@ -147,7 +147,6 @@ class FSEngine:
         tot_sf_cy = sc_cy + rs_cy + sam_cy
         tot_sf_py = sc_py + rs_py + sam_py
         lines.append(_tot("    Sub-total — Shareholders' Funds (A)", tot_sf_cy, tot_sf_py))
-        lines.append(_blank())
 
         # Non-Current Liabilities
         lines.append(_line("2.  Non-Current Liabilities", 0, 0, indent=1, row_type="SECTION"))
@@ -164,7 +163,6 @@ class FSEngine:
         tot_ncl_cy = ltb_cy + dtl_cy + otl_cy + ltp_cy
         tot_ncl_py = ltb_py + dtl_py + otl_py + ltp_py
         lines.append(_tot("    Sub-total — Non-Current Liabilities (B)", tot_ncl_cy, tot_ncl_py))
-        lines.append(_blank())
 
         # Current Liabilities
         lines.append(_line("3.  Current Liabilities", 0, 0, indent=1, row_type="SECTION"))
@@ -183,12 +181,10 @@ class FSEngine:
         tot_cl_cy = stb_cy + tp_cy + ocl_cy + stp_cy
         tot_cl_py = stb_py + tp_py + ocl_py + stp_py
         lines.append(_tot("    Sub-total — Current Liabilities (C)", tot_cl_cy, tot_cl_py))
-        lines.append(_blank())
 
         tot_el_cy = tot_sf_cy + tot_ncl_cy + tot_cl_cy
         tot_el_py = tot_sf_py + tot_ncl_py + tot_cl_py
         lines.append(_grand("TOTAL — EQUITY AND LIABILITIES (A+B+C)", tot_el_cy, tot_el_py))
-        lines.append(_blank())
 
         # ── ASSETS ────────────────────────────────────────────────────────
         lines.append(_sec("II.  ASSETS"))
@@ -218,7 +214,6 @@ class FSEngine:
         tot_nca_cy = ppe_net + nci_cy + dta_cy + ltla_cy + onca_cy
         tot_nca_py = ppe_net_py + nci_py + dta_py + ltla_py + onca_py
         lines.append(_tot("    Sub-total — Non-Current Assets (D)", tot_nca_cy, tot_nca_py))
-        lines.append(_blank())
 
         # Current Assets
         lines.append(_line("2.  Current Assets", 0, 0, indent=1, row_type="SECTION"))
@@ -240,7 +235,6 @@ class FSEngine:
         tot_ca_cy = inv_cy + tr_cy + cash_cy + stla_cy + oca_cy
         tot_ca_py = inv_py + tr_py + cash_py + stla_py + oca_py
         lines.append(_tot("    Sub-total — Current Assets (E)", tot_ca_cy, tot_ca_py))
-        lines.append(_blank())
 
         tot_as_cy = tot_nca_cy + tot_ca_cy
         tot_as_py = tot_nca_py + tot_ca_py

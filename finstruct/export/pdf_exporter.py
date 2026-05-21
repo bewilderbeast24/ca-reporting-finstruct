@@ -60,8 +60,8 @@ def _fmt(v: float, div: int = 1) -> str:
     return f"{v:,.2f}"
 
 
-def _fs_table(lines: list[FSLine], section: str) -> Table:
-    data = [["Particulars", "Note", "Current Year ₹", "Previous Year ₹"]]
+def _fs_table(lines: list[FSLine], section: str, cy_label: str = "Current Year Rs.", py_label: str = "Previous Year Rs.") -> Table:
+    data = [["Particulars", "Note", cy_label, py_label]]
     row_styles = []
 
     for i, ln in enumerate(lines, start=1):
@@ -132,9 +132,9 @@ def _fs_table(lines: list[FSLine], section: str) -> Table:
         ("ALIGN",       (1, 0), (1, -1), "CENTER"),
         ("GRID",        (0, 0), (-1, -1), 0.25, colors.HexColor("#EDEBE9")),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [C_WHITE, C_ALT]),
-        ("FONTSIZE",    (0, 1), (-1, -1), 8.5),
-        ("TOPPADDING",  (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
+        ("FONTSIZE",    (0, 1), (-1, -1), 8),
+        ("TOPPADDING",  (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
     ]
@@ -142,11 +142,11 @@ def _fs_table(lines: list[FSLine], section: str) -> Table:
     return t
 
 
-def _note_table(note: Note) -> Table:
+def _note_table(note: Note, cy_label: str = "Current Year Rs.", py_label: str = "Previous Year Rs.") -> Table:
     data = [[Paragraph(f"<b>Note {note.number}: {note.title}</b>",
                         ParagraphStyle("nh", fontSize=9, fontName="Helvetica-Bold",
                                        textColor=C_WHITE)),
-             "Current Year ₹", "Previous Year ₹"]]
+             cy_label, py_label]]
     row_styles: list = []
     for i, ln in enumerate(note.lines, start=1):
         if ln.row_type == "BLANK":
@@ -186,9 +186,9 @@ def _note_table(note: Note) -> Table:
         ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
         ("ALIGN",       (1, 0), (-1, -1), "RIGHT"),
         ("GRID",        (0, 0), (-1, -1), 0.25, colors.HexColor("#EDEBE9")),
-        ("FONTSIZE",    (0, 1), (-1, -1), 8.5),
-        ("TOPPADDING",  (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
+        ("FONTSIZE",    (0, 1), (-1, -1), 8),
+        ("TOPPADDING",  (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
     ] + row_styles))
     return t
@@ -201,8 +201,20 @@ def export_pdf(doc: FSDocument, notes: list[Note], output_path: Path,
     entity_name = em.get("entity_name", em.get("Company_Name", "Entity"))
     address     = em.get("address", em.get("Registered_Office", ""))
     fy          = doc.fy
-    divisor_label = {1: "₹", 1000: "₹ in Thousands",
-                     100000: "₹ in Lakhs", 10000000: "₹ in Crores"}.get(doc.divisor, "₹")
+    # Derive FY labels: "2024-25" → cy_label = "Rs. FY 2024-25", py_label = "Rs. FY 2023-24"
+    try:
+        fy_parts = fy.split("-")
+        fy_start_cy = int(fy_parts[0])
+        fy_end_cy = int(fy_parts[1])
+        fy_start_py = fy_start_cy - 1
+        fy_end_py = fy_end_cy - 1
+        cy_label = f"Rs. FY {fy_start_cy}-{fy_end_cy:02d}"
+        py_label = f"Rs. FY {fy_start_py}-{fy_end_py:02d}"
+    except (IndexError, ValueError):
+        cy_label = "Rs. Current Year"
+        py_label = "Rs. Previous Year"
+    divisor_label = {1: "Rs.", 1000: "Rs. in Thousands",
+                     100000: "Rs. in Lakhs", 10000000: "Rs. in Crores"}.get(doc.divisor, "Rs.")
     auditor_firm    = em.get("auditor_firm", em.get("Auditor_Firm", "[Auditor Firm]"))
     auditor_partner = em.get("auditor_partner", em.get("Auditor_Partner", "[Partner Name]"))
     auditor_mrn     = em.get("auditor_mrn", em.get("Auditor_MemNo", ""))
@@ -252,7 +264,7 @@ def export_pdf(doc: FSDocument, notes: list[Note], output_path: Path,
         story.append(Spacer(1, 4*mm))
 
     def _footer_table():
-        story.append(Spacer(1, 6*mm))
+        story.append(Spacer(1, 3*mm))
         story.append(Paragraph(
             "<i>The accompanying notes form an integral part of the financial statements.</i>",
             ParagraphStyle("fi", fontSize=8, fontName="Helvetica-Oblique", alignment=TA_CENTER)))
@@ -329,32 +341,32 @@ def export_pdf(doc: FSDocument, notes: list[Note], output_path: Path,
     # Balance Sheet
     if doc.bs:
         _entity_header(f"Balance Sheet as at 31st March, {year_end}")
-        story.append(_fs_table(doc.bs, "BS"))
+        story.append(_fs_table(doc.bs, "BS", cy_label, py_label))
         _footer_table()
         story.append(PageBreak())
 
     # P&L or I&E
     if doc.pl:
         _entity_header(f"Statement of Profit and Loss for the year ended 31st March, {year_end}")
-        story.append(_fs_table(doc.pl, "PL"))
+        story.append(_fs_table(doc.pl, "PL", cy_label, py_label))
         _footer_table()
         story.append(PageBreak())
     if doc.ie:
         _entity_header(f"Income and Expenditure Account for the year ended 31st March, {year_end}")
-        story.append(_fs_table(doc.ie, "IE"))
+        story.append(_fs_table(doc.ie, "IE", cy_label, py_label))
         _footer_table()
         story.append(PageBreak())
 
     # R&P
     if doc.rp:
         _entity_header(f"Receipt and Payment Account for the year ended 31st March, {year_end}")
-        story.append(_fs_table(doc.rp, "RP"))
+        story.append(_fs_table(doc.rp, "RP", cy_label, py_label))
         story.append(PageBreak())
 
     # Cash Flow
     if doc.cf:
         _entity_header(f"Cash Flow Statement for the year ended 31st March, {year_end}")
-        story.append(_fs_table(doc.cf, "CF"))
+        story.append(_fs_table(doc.cf, "CF", cy_label, py_label))
         story.append(PageBreak())
 
     # Notes
@@ -362,7 +374,7 @@ def export_pdf(doc: FSDocument, notes: list[Note], output_path: Path,
         story.append(Paragraph("Notes to Financial Statements", st["title"]))
         story.append(Spacer(1, 4*mm))
         for note in notes:
-            story.append(_note_table(note))
+            story.append(_note_table(note, cy_label, py_label))
             story.append(Spacer(1, 4*mm))
 
     pdf.build(story, onFirstPage=_page_header_footer, onLaterPages=_page_header_footer)

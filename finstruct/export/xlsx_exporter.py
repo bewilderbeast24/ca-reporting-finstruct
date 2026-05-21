@@ -37,7 +37,7 @@ def _border() -> Border:
     return Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
 
-def _write_fs_sheet(ws, lines: list[FSLine], sheet_title: str, em: dict, fy: str):
+def _write_fs_sheet(ws, lines: list[FSLine], sheet_title: str, em: dict, fy: str, cy_label: str = "Current Year Rs.", py_label: str = "Previous Year Rs."):
     entity_name = em.get("entity_name", em.get("Company_Name", "Entity"))
     ws.append([entity_name.upper()])
     ws["A1"].font = Font(name="Segoe UI", bold=True, size=13, color="FF0078D4")
@@ -45,13 +45,13 @@ def _write_fs_sheet(ws, lines: list[FSLine], sheet_title: str, em: dict, fy: str
     ws.append([sheet_title])
     ws["A2"].font = Font(name="Segoe UI", bold=True, size=11)
     ws.merge_cells("A2:D2")
-    ws.append([f"FY {fy}  |  All amounts in ₹ unless otherwise stated"])
+    ws.append([f"FY {fy}  |  All amounts in Rs. unless otherwise stated"])
     ws["A3"].font = Font(name="Segoe UI", size=8, italic=True, color="FF605E5C")
     ws.merge_cells("A3:D3")
     ws.append([])
 
     hdr_row = 5
-    ws.append(["Particulars", "Note", "Current Year ₹", "Previous Year ₹"])
+    ws.append(["Particulars", "Note", cy_label, py_label])
     for col, w in zip(["A","B","C","D"], [55, 8, 18, 18]):
         ws.column_dimensions[col].width = w
     for c in range(1, 5):
@@ -120,12 +120,12 @@ def _write_fs_sheet(ws, lines: list[FSLine], sheet_title: str, em: dict, fy: str
     ws.freeze_panes = f"A{hdr_row+1}"
 
 
-def _write_note_sheet(ws, note: Note):
+def _write_note_sheet(ws, note: Note, cy_label: str = "Current Year Rs.", py_label: str = "Previous Year Rs."):
     ws.append([f"Note {note.number}: {note.title}"])
     ws["A1"].font = Font(name="Segoe UI", bold=True, size=11, color="FF0078D4")
     ws.merge_cells("A1:C1")
     ws.append([])
-    ws.append(["Particulars", "Current Year ₹", "Previous Year ₹"])
+    ws.append(["Particulars", cy_label, py_label])
     for col, w in zip(["A","B","C"], [55, 18, 18]):
         ws.column_dimensions[col].width = w
     for c in range(1, 4):
@@ -170,6 +170,19 @@ def export_xlsx(doc: FSDocument, notes: list[Note], output_path: Path):
     wb = Workbook()
     em = doc.entity_master
 
+    # Derive FY labels: "2024-25" → cy_label = "Rs. FY 2024-25", py_label = "Rs. FY 2023-24"
+    try:
+        fy_parts = doc.fy.split("-")
+        fy_start_cy = int(fy_parts[0])
+        fy_end_cy = int(fy_parts[1])
+        fy_start_py = fy_start_cy - 1
+        fy_end_py = fy_end_cy - 1
+        cy_label = f"Rs. FY {fy_start_cy}-{fy_end_cy:02d}"
+        py_label = f"Rs. FY {fy_start_py}-{fy_end_py:02d}"
+    except (IndexError, ValueError):
+        cy_label = "Rs. Current Year"
+        py_label = "Rs. Previous Year"
+
     sheet_map = [
         ("BS",  doc.bs,  "Balance Sheet"),
         ("PL",  doc.pl,  "Profit & Loss"),
@@ -187,10 +200,10 @@ def export_xlsx(doc: FSDocument, notes: list[Note], output_path: Path):
             first = False
         else:
             ws = wb.create_sheet(tab)
-        _write_fs_sheet(ws, lines, title, em, doc.fy)
+        _write_fs_sheet(ws, lines, title, em, doc.fy, cy_label, py_label)
 
     for note in notes:
         ws = wb.create_sheet(f"N{note.number}")
-        _write_note_sheet(ws, note)
+        _write_note_sheet(ws, note, cy_label, py_label)
 
     wb.save(output_path)
