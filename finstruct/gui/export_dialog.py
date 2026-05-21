@@ -134,7 +134,8 @@ class ExportDialog(tk.Toplevel):
             if self._do_pdf.get():
                 self.after(0, lambda: self._status_var.set("Generating PDF …"))
                 from ..export.pdf_exporter import export_pdf
-                export_pdf(doc, notes, folder / f"{stem}_FS.pdf", is_draft=is_draft)
+                export_pdf(doc, notes, folder / f"{stem}_FS.pdf",
+                           is_draft=is_draft, db=self._db)
 
             if self._do_xlsx.get():
                 self.after(0, lambda: self._status_var.set("Generating XLSX …"))

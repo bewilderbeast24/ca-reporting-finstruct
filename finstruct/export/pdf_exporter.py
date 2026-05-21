@@ -195,7 +195,7 @@ def _note_table(note: Note) -> Table:
 
 
 def export_pdf(doc: FSDocument, notes: list[Note], output_path: Path,
-               is_draft: bool = True):
+               is_draft: bool = True, db=None):
     st = _styles()
     em = doc.entity_master
     entity_name = em.get("entity_name", em.get("Company_Name", "Entity"))
@@ -210,11 +210,6 @@ def export_pdf(doc: FSDocument, notes: list[Note], output_path: Path,
     sign_place      = em.get("signing_place", em.get("Signing_Place", ""))
     sign_date       = em.get("signing_date", em.get("Signing_Date",
                              datetime.now().strftime("%d-%b-%Y")))
-    dir1_name  = em.get("dir1_name", em.get("DIR_1_NAME", ""))
-    dir1_desig = em.get("dir1_desig", em.get("DIR_1_DESIG", "Director"))
-    dir1_din   = em.get("dir1_din", em.get("DIR_1_DIN", ""))
-    dir2_name  = em.get("dir2_name", em.get("DIR_2_NAME", ""))
-
     pdf = SimpleDocTemplate(
         str(output_path), pagesize=A4,
         leftMargin=20*mm, rightMargin=20*mm,
@@ -262,29 +257,73 @@ def export_pdf(doc: FSDocument, notes: list[Note], output_path: Path,
             "<i>The accompanying notes form an integral part of the financial statements.</i>",
             ParagraphStyle("fi", fontSize=8, fontName="Helvetica-Oblique", alignment=TA_CENTER)))
         story.append(Spacer(1, 4*mm))
+        # Dynamic signing directors
+        signing_dirs = []
+        try:
+            if db is not None:
+                signing_dirs = [dict(d) for d in db.get_directors() if d["is_signing_auth"]]
+        except Exception:
+            pass
+        # Fallback: build from legacy entity_master fields if directors table unavailable
+        if not signing_dirs:
+            for i in (1, 2):
+                n = em.get(f"dir{i}_name", "").strip()
+                if n:
+                    signing_dirs.append({
+                        "name": n,
+                        "designation": em.get(f"dir{i}_desig", "Director"),
+                        "din": em.get(f"dir{i}_din", ""),
+                    })
+
+        # Build signing block rows (auditor left, directors right in pairs)
         fdata = [
             ["As per our report of even date", "", "For and on behalf of the Board", ""],
             [f"For {auditor_firm}", "", entity_name.upper(), ""],
             ["Chartered Accountants", "", f"FRN: {auditor_frn}", ""],
-            ["", "", "", ""],
-            ["", "", "", ""],
-            [auditor_partner, "", dir1_name, dir2_name or ""],
-            ["Partner", "", dir1_desig, ""],
-            [f"M No: {auditor_mrn}", "", f"DIN: {dir1_din}", ""],
-            ["", "", "", ""],
-            [f"Place: {sign_place}", "", "", ""],
-            [f"Date: {sign_date}", "", "", ""],
         ]
-        ft = Table(fdata, colWidths=[W*0.3, W*0.05, W*0.35, W*0.3])
-        ft.setStyle(TableStyle([
+        # Pair up signing directors
+        for idx in range(0, max(len(signing_dirs), 1), 2):
+            d1 = signing_dirs[idx] if idx < len(signing_dirs) else None
+            d2 = signing_dirs[idx+1] if idx+1 < len(signing_dirs) else None
+            fdata.append(["", "", "", ""])
+            fdata.append(["", "", "", ""])
+            fdata.append([
+                auditor_partner if idx == 0 else "",
+                "",
+                d1["name"] if d1 else "",
+                d2["name"] if d2 else "",
+            ])
+            fdata.append([
+                "Partner" if idx == 0 else "",
+                "",
+                d1.get("designation","Director") if d1 else "",
+                d2.get("designation","") if d2 else "",
+            ])
+            fdata.append([
+                f"M No: {auditor_mrn}" if idx == 0 else "",
+                "",
+                f"DIN: {d1['din']}" if d1 and d1.get("din") else "",
+                f"DIN: {d2['din']}" if d2 and d2.get("din") else "",
+            ])
+        fdata.append(["", "", "", ""])
+        fdata.append([f"Place: {sign_place}", "", "", ""])
+        fdata.append([f"Date: {sign_date}", "", "", ""])
+
+        ft = Table(fdata, colWidths=[W*0.3, W*0.05, W*0.32, W*0.33])
+        style_cmds = [
             ("FONTSIZE",  (0,0), (-1,-1), 8),
             ("FONTNAME",  (0,0), (0,0), "Helvetica-Bold"),
-            ("FONTNAME",  (0,5), (0,5), "Helvetica-Bold"),
-            ("FONTNAME",  (2,5), (2,5), "Helvetica-Bold"),
-            ("FONTNAME",  (3,5), (3,5), "Helvetica-Bold"),
             ("TOPPADDING",(0,0),(-1,-1),2),
-            ("LINEABOVE", (0,5),(-1,5), 0.5, C_DARK),
-        ]))
+        ]
+        # Bold the name rows
+        for r_idx, row in enumerate(fdata):
+            if r_idx >= 3 and row[0] and row[0] not in ("", f"M No: {auditor_mrn}", f"Place: {sign_place}", f"Date: {sign_date}"):
+                style_cmds.append(("FONTNAME", (0,r_idx),(0,r_idx),"Helvetica-Bold"))
+                style_cmds.append(("LINEABOVE",(0,r_idx),(-1,r_idx),0.5,C_DARK))
+            if r_idx >= 3 and row[2] and row[2] not in (entity_name.upper(), f"FRN: {auditor_frn}"):
+                if not row[2].startswith("DIN:"):
+                    style_cmds.append(("FONTNAME",(2,r_idx),(3,r_idx),"Helvetica-Bold"))
+        ft.setStyle(TableStyle(style_cmds))
         story.append(ft)
 
     # Balance Sheet

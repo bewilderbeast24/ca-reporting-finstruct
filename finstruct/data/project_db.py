@@ -121,11 +121,21 @@ class ProjectDB:
             ts TEXT DEFAULT (datetime('now','localtime')),
             action TEXT, detail TEXT
         );
+        CREATE TABLE IF NOT EXISTS directors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            designation TEXT DEFAULT 'Director',
+            din TEXT DEFAULT '',
+            pan TEXT DEFAULT '',
+            is_signing_auth INTEGER DEFAULT 1,
+            sort_order INTEGER DEFAULT 0
+        );
         """)
         c.commit()
         if not self.get_meta("schema_version"):
             self.set_meta("schema_version", str(SCHEMA_VERSION))
             self.set_meta("created_at", datetime.now().isoformat())
+        self.migrate_legacy_directors()
 
     # ── Meta ─────────────────────────────────────────────────────────────
     def get_meta(self, key: str) -> str | None:
@@ -173,6 +183,48 @@ class ProjectDB:
                 self._conn.execute(
                     "INSERT OR REPLACE INTO entity_master(key,value) VALUES(?,?)", (k, stored)
                 )
+
+    def get_directors(self) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT * FROM directors ORDER BY sort_order, id"
+        ).fetchall()
+
+    def upsert_director(self, d: dict) -> int:
+        with self._tx():
+            if d.get("id"):
+                self._conn.execute(
+                    "UPDATE directors SET name=?,designation=?,din=?,pan=?,is_signing_auth=?,sort_order=? WHERE id=?",
+                    (d["name"], d.get("designation","Director"), d.get("din",""), d.get("pan",""),
+                     int(d.get("is_signing_auth",1)), int(d.get("sort_order",0)), d["id"])
+                )
+                return d["id"]
+            else:
+                cur = self._conn.execute(
+                    "INSERT INTO directors(name,designation,din,pan,is_signing_auth,sort_order) VALUES(?,?,?,?,?,?)",
+                    (d["name"], d.get("designation","Director"), d.get("din",""), d.get("pan",""),
+                     int(d.get("is_signing_auth",1)), int(d.get("sort_order",0)))
+                )
+                return cur.lastrowid
+
+    def delete_director(self, dir_id: int):
+        with self._tx():
+            self._conn.execute("DELETE FROM directors WHERE id=?", (dir_id,))
+
+    def migrate_legacy_directors(self):
+        """Migrate dir1_name/dir2_name from entity_master to directors table (run once)."""
+        if self._conn.execute("SELECT COUNT(*) FROM directors").fetchone()[0] > 0:
+            return  # already migrated
+        em = self.get_all_entity()
+        for i in (1, 2):
+            name = em.get(f"dir{i}_name", "").strip()
+            if name:
+                self.upsert_director({
+                    "name": name,
+                    "designation": em.get(f"dir{i}_desig", "Director"),
+                    "din": em.get(f"dir{i}_din", ""),
+                    "is_signing_auth": 1,
+                    "sort_order": i - 1,
+                })
 
     # ── Raw TB ───────────────────────────────────────────────────────────
     def clear_raw_tb(self):
