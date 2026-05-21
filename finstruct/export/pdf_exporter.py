@@ -17,18 +17,25 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from ..core.fs_engine import FSLine, FSDocument, RowType
 from ..core.notes_engine import Note
 
-# ── Colours (MS Office Blue palette) ──────────────────────────────────
-C_PRIMARY   = colors.HexColor("#0078D4")
-C_DARK      = colors.HexColor("#106EBE")
-C_LIGHT     = colors.HexColor("#C7E0F4")
-C_BG        = colors.HexColor("#F3F2F1")
+# ── Colours (NSE/BSE listed-company neutral grey palette) ──────────────
+C_HDR_BG    = colors.HexColor("#333333")    # Dark grey headers
+C_HDR_TEXT  = colors.white                  # White text on headers
+C_CY_TINT   = colors.HexColor("#F2F2F2")    # Light grey for CY column
+C_PY_BG     = colors.white                  # White for PY column
+C_ALT_ROW   = colors.HexColor("#F9F9F9")    # Very light grey alternating rows
+C_BORDER    = colors.HexColor("#CCCCCC")    # Grey borders
+C_BG        = colors.HexColor("#F3F2F1")    # Page background
 C_WHITE     = colors.white
 C_TEXT      = colors.HexColor("#201F1E")
-C_TOTAL_BG  = colors.HexColor("#106EBE")
-C_SEC_BG    = colors.HexColor("#C7E0F4")
-C_GRAND_BG  = colors.HexColor("#0078D4")
 C_WARN      = colors.HexColor("#A4262C")
-C_ALT       = colors.HexColor("#EFF6FC")
+C_SEC_BG    = colors.HexColor("#F5F5F5")    # Light grey for section rows
+# Legacy names for compatibility
+C_PRIMARY   = C_HDR_BG
+C_DARK      = C_BORDER
+C_LIGHT     = C_SEC_BG
+C_TOTAL_BG  = C_BORDER
+C_GRAND_BG  = C_BORDER
+C_ALT       = C_ALT_ROW
 
 W = A4[0] - 40*mm
 COL_LABEL = W * 0.58
@@ -81,7 +88,7 @@ def _fs_table(lines: list[FSLine], section: str, cy_label: str = "Current Year R
         if ln.row_type == "SECTION":
             data.append([Paragraph(f"<b>{ln.label}</b>", ParagraphStyle(
                 "sec", fontSize=9, fontName="Helvetica-Bold",
-                textColor=colors.HexColor("#003087"),
+                textColor=colors.HexColor("#333333"),
                 leftIndent=ln.indent * 6)), "", "", ""])
             row_styles += [
                 ("BACKGROUND", (0, i), (-1, i), C_SEC_BG),
@@ -107,31 +114,40 @@ def _fs_table(lines: list[FSLine], section: str, cy_label: str = "Current Year R
 
         if ln.row_type == "GRAND":
             row_styles += [
-                ("BACKGROUND", (0, i), (-1, i), C_GRAND_BG),
-                ("TEXTCOLOR",  (0, i), (-1, i), C_WHITE),
                 ("FONTNAME",   (0, i), (-1, i), "Helvetica-Bold"),
+                ("LINEABOVE",  (0, i), (-1, i), 0.5, C_BORDER),
+                ("LINEBELOW",  (0, i), (-1, i), 0.5, C_BORDER),
             ]
         elif ln.row_type == "TOTAL":
             row_styles += [
-                ("BACKGROUND", (0, i), (-1, i), C_TOTAL_BG),
-                ("TEXTCOLOR",  (0, i), (-1, i), C_WHITE),
                 ("FONTNAME",   (0, i), (-1, i), "Helvetica-Bold"),
-                ("LINEABOVE",  (0, i), (-1, i), 0.5, C_DARK),
+                ("LINEABOVE",  (0, i), (-1, i), 0.5, C_BORDER),
             ]
         elif i % 2 == 0:
-            row_styles += [("BACKGROUND", (0, i), (-1, i), C_ALT)]
+            row_styles += [
+                ("BACKGROUND", (0, i), (1, i), C_WHITE),
+                ("BACKGROUND", (2, i), (2, i), C_ALT_ROW),
+                ("BACKGROUND", (3, i), (-1, i), C_WHITE),
+            ]
+        else:
+            row_styles += [
+                ("BACKGROUND", (2, i), (2, i), C_CY_TINT),
+            ]
 
     col_widths = [COL_LABEL, 18*mm, COL_CY, COL_PY]
     t = Table(data, colWidths=col_widths, repeatRows=1)
     base_style = [
-        ("BACKGROUND",  (0, 0), (-1, 0), C_PRIMARY),
-        ("TEXTCOLOR",   (0, 0), (-1, 0), C_WHITE),
+        ("BACKGROUND",  (0, 0), (-1, 0), C_HDR_BG),
+        ("TEXTCOLOR",   (0, 0), (-1, 0), C_HDR_TEXT),
         ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE",    (0, 0), (-1, 0), 9),
         ("ALIGN",       (2, 0), (-1, -1), "RIGHT"),
         ("ALIGN",       (1, 0), (1, -1), "CENTER"),
         ("GRID",        (0, 0), (-1, -1), 0.25, colors.HexColor("#EDEBE9")),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [C_WHITE, C_ALT]),
+        # CY column (index 2) gets light grey tint
+        ("BACKGROUND",  (2, 1), (2, -1), C_CY_TINT),
+        # PY column (index 3) stays white
+        ("BACKGROUND",  (3, 1), (3, -1), C_WHITE),
         ("FONTSIZE",    (0, 1), (-1, -1), 8),
         ("TOPPADDING",  (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
@@ -171,21 +187,32 @@ def _note_table(note: Note, cy_label: str = "Current Year Rs.", py_label: str = 
         data.append([p, cy, py])
         if ln.row_type in ("TOTAL", "GRAND"):
             row_styles += [
-                ("BACKGROUND", (0, i), (-1, i), C_TOTAL_BG),
-                ("TEXTCOLOR",  (0, i), (-1, i), C_WHITE),
                 ("FONTNAME",   (0, i), (-1, i), "Helvetica-Bold"),
+                ("LINEABOVE",  (0, i), (-1, i), 0.5, C_BORDER),
             ]
         elif i % 2 == 0:
-            row_styles += [("BACKGROUND", (0, i), (-1, i), C_ALT)]
+            row_styles += [
+                ("BACKGROUND", (0, i), (0, i), C_WHITE),
+                ("BACKGROUND", (1, i), (1, i), C_ALT_ROW),
+                ("BACKGROUND", (2, i), (-1, i), C_WHITE),
+            ]
+        else:
+            row_styles += [
+                ("BACKGROUND", (1, i), (1, i), C_CY_TINT),
+            ]
 
     cw = [COL_LABEL + 18*mm, COL_CY, COL_PY]
     t = Table(data, colWidths=cw, repeatRows=1)
     t.setStyle(TableStyle([
-        ("BACKGROUND",  (0, 0), (-1, 0), C_PRIMARY),
-        ("TEXTCOLOR",   (0, 0), (-1, 0), C_WHITE),
+        ("BACKGROUND",  (0, 0), (-1, 0), C_HDR_BG),
+        ("TEXTCOLOR",   (0, 0), (-1, 0), C_HDR_TEXT),
         ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
         ("ALIGN",       (1, 0), (-1, -1), "RIGHT"),
         ("GRID",        (0, 0), (-1, -1), 0.25, colors.HexColor("#EDEBE9")),
+        # CY column (index 1 in notes table) gets light grey tint
+        ("BACKGROUND",  (1, 1), (1, -1), C_CY_TINT),
+        # PY column (index 2) stays white
+        ("BACKGROUND",  (2, 1), (2, -1), C_WHITE),
         ("FONTSIZE",    (0, 1), (-1, -1), 8),
         ("TOPPADDING",  (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
