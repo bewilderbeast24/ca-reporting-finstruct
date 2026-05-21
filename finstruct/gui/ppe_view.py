@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
+from pathlib import Path
+from openpyxl import load_workbook
 from ..config import THEME as T, PPE_CATEGORIES
 from ..core.ppe_engine import recalc_asset, summarize_ppe
+from ..core.ppe_template_generator import generate_ppe_template
 from ..gui.theme import primary_btn, secondary_btn, label
 from .fs_grid_view import EditableGrid
 
@@ -22,7 +25,8 @@ class PPEView(ttk.Frame):
         top.pack(fill="x", padx=8, pady=6)
         label(top, "5.  PPE / Fixed Asset Register", style="Sec.TLabel").pack(side="left")
         primary_btn(top, "+ Add Asset", command=self._add_asset).pack(side="left", padx=8)
-        secondary_btn(top, "Recalculate All", command=self._recalc_all).pack(side="left", padx=4)
+        secondary_btn(top, "📥  Import from Excel", command=self._import_ppe).pack(side="left", padx=4)
+        secondary_btn(top, "📥  Download Template", command=self._download_template).pack(side="left", padx=4)
         secondary_btn(top, "Post Depreciation to WTB", command=self._post_dep).pack(side="left", padx=4)
         secondary_btn(top, "Delete Selected", command=self._delete_asset).pack(side="left", padx=4)
 
@@ -61,9 +65,8 @@ class PPEView(ttk.Frame):
         grid_rows = []
         for i, a in enumerate(rows_db):
             d = dict(a)
-            r = recalc_asset(d)
             self._assets.append(d)
-            grid_rows.append(self._make_row(r, i))
+            grid_rows.append(self._make_row(d, i))
         self._grid.load_rows(grid_rows)
         self._refresh_totals()
 
@@ -143,4 +146,79 @@ class PPEView(ttk.Frame):
             self._on_dep_posted(dep)
 
     def _on_change(self, iid: str, col_id: str, new_val: str):
-        pass  # recalc on "Recalculate All" button
+        pass  # No auto-recalc; user imports final figures
+
+    def _download_template(self):
+        save_path = filedialog.asksaveasfilename(
+            title="Save PPE Data Entry Template",
+            defaultextension=".xlsx",
+            initialfile="PPE_Template.xlsx",
+            filetypes=[("Excel Workbook", "*.xlsx")]
+        )
+        if not save_path:
+            return
+        try:
+            generate_ppe_template(Path(save_path))
+            messagebox.showinfo(
+                "Template Saved",
+                f"✅ PPE template saved to:\n{save_path}\n\n"
+                "Instructions:\n"
+                " • Fill Col A: Asset ID (e.g., LA001)\n"
+                " • Fill Col B: Asset Name\n"
+                " • Fill Col C: Category from list\n"
+                " • Fill Cols D-H: Gross/Accumulated Dep values for CY/PY and CWIP\n\n"
+                "Then use 'Import from Excel' to load the data."
+            )
+        except Exception as e:
+            messagebox.showerror("Template Error", f"Failed to generate template:\n{e}")
+
+    def _import_ppe(self):
+        path = filedialog.askopenfilename(
+            title="Select PPE Data File",
+            filetypes=[("Excel", "*.xlsx"), ("All", "*.*")]
+        )
+        if not path:
+            return
+        try:
+            wb = load_workbook(Path(path), data_only=True)
+            ws = wb.active
+            rows = list(ws.iter_rows(min_row=4, values_only=True))
+            wb.close()
+
+            # Parse rows: AssetID, Name, Category, Gross CY, Acc Dep CY, Gross PY, Acc Dep PY, CWIP
+            imported = 0
+            for row in rows:
+                if not row or not row[0]:
+                    continue  # Skip empty rows
+                try:
+                    asset = {
+                        "asset_id": str(row[0] or "").strip(),
+                        "asset_name": str(row[1] or "").strip(),
+                        "category": str(row[2] or "Plant & Machinery").strip(),
+                        "method": "SLM",  # Default
+                        "useful_life_yrs": 5,  # Default
+                        "gross_op": float(row[5] or 0) if len(row) > 5 else 0,  # Gross PY
+                        "gross_cl": float(row[3] or 0) if len(row) > 3 else 0,  # Gross CY
+                        "additions": 0,  # Not in template
+                        "disposals": 0,   # Not in template
+                        "dep_op": float(row[6] or 0) if len(row) > 6 else 0,   # Acc Dep PY
+                        "dep_cl": float(row[4] or 0) if len(row) > 4 else 0,   # Acc Dep CY
+                        "dep_charge": 0,  # Will be computed if needed
+                        "nbv_py": 0,      # Will be computed
+                        "nbv_cy": 0,      # Will be computed
+                        "it_dep": 0,      # Default
+                    }
+                    if asset["asset_name"]:
+                        self._db.upsert_ppe(asset)
+                        imported += 1
+                except (ValueError, IndexError, TypeError) as e:
+                    continue
+
+            if imported > 0:
+                self._load()
+                messagebox.showinfo("Imported",
+                    f"✅ {imported} asset(s) imported successfully from PPE template.")
+            else:
+                messagebox.showwarning("No Data", "No valid asset data found in file.")
+        except Exception as e:
+            messagebox.showerror("Import Error", f"Failed to import PPE data:\n{e}")
