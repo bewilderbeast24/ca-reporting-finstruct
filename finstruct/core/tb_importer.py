@@ -1,4 +1,4 @@
-"""Trial Balance importer — XLSX, CSV, Tally XML."""
+"""Trial Balance importer — XLSX, CSV, Tally XML, and FinStruct templates."""
 
 from __future__ import annotations
 import csv
@@ -29,8 +29,28 @@ def _detect_col(headers: list[str], candidates: set[str]) -> int | None:
 
 def _to_float(v) -> float:
     try:
-        s = str(v or "").replace(",", "").replace("(", "-").replace(")", "").strip()
-        return float(s) if s else 0.0
+        s = str(v or "").strip()
+        # Strip currency prefixes
+        for prefix in ("₹", "Rs.", "Rs", "INR"):
+            s = s.replace(prefix, "")
+        s = s.strip()
+        # Handle Dr/Cr suffix — extract sign first, then strip suffix
+        suffix_sign = 1
+        sl = s.lower()
+        for sfx in ("cr", "credit"):
+            if sl.endswith(sfx):
+                suffix_sign = -1
+                s = s[: -len(sfx)].strip()
+                break
+        else:
+            for sfx in ("dr", "debit"):
+                if sl.endswith(sfx):
+                    s = s[: -len(sfx)].strip()
+                    break
+        # Handle bracket notation for negatives: (1234) → -1234
+        s = s.replace(",", "").replace("(", "-").replace(")", "")
+        val = float(s) if s else 0.0
+        return val * suffix_sign
     except (ValueError, TypeError):
         return 0.0
 
@@ -43,7 +63,98 @@ class ImportResult:
         self.col_map: dict[str, int | None] = {}
 
 
+def detect_finstruct_template(path: Path) -> str | None:
+    """Check cell A1 of 'TrialBalance' sheet for a FinStruct sentinel; return entity_type or None."""
+    try:
+        from openpyxl import load_workbook
+        from .tb_template_generator import SENTINELS
+        wb = load_workbook(path, read_only=True, data_only=True)
+        ws = wb["TrialBalance"] if "TrialBalance" in wb.sheetnames else wb.active
+        val = str(ws.cell(1, 1).value or "").strip()
+        wb.close()
+        for etype, sentinel in SENTINELS.items():
+            if val == sentinel:
+                return etype
+    except Exception as e:
+        log.debug("Template detection failed: %s", e)
+    return None
+
+
+def import_finstruct_template(path: Path, entity_type: str) -> ImportResult:
+    """Import a FinStruct standardised TB template (row 1 = sentinel, row 2 = headers, data from row 3).
+
+    Net-balance types (COMPANY, SEC8, LLP): col A=ledger, col B=lookup_name, col C=cy_net, col D=py_net
+    Dr/Cr types (PROP, PART, AOP, TRUST):   col A=ledger, col B=group,       col C=cy_dr, col D=cy_cr,
+                                                                               col E=py_dr, col F=py_cr
+    """
+    result = ImportResult()
+    _NET_BALANCE = {"COMPANY", "SEC8", "LLP"}
+    etype = entity_type.upper()
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(path, read_only=True, data_only=True)
+        ws = wb["TrialBalance"] if "TrialBalance" in wb.sheetnames else wb.active
+        all_rows = list(ws.iter_rows(values_only=True))
+        wb.close()
+    except Exception as e:
+        result.errors.append(f"Template read error: {e}")
+        return result
+
+    # Rows: 0=sentinel, 1=headers, 2+ = data
+    if len(all_rows) < 3:
+        result.errors.append("Template has no data rows.")
+        return result
+
+    is_net = etype in _NET_BALANCE
+    source_tag = f"TEMPLATE_{etype}"
+
+    for raw_row in all_rows[2:]:
+        row = list(raw_row)
+        if all((v is None or str(v).strip() == "") for v in row):
+            continue
+        ledger = str(row[0] if row else "").strip()
+        if not ledger:
+            continue
+        mapping = str(row[1] if len(row) > 1 else "").strip()
+
+        if is_net:
+            cy_net = _to_float(row[2] if len(row) > 2 else 0)
+            py_net = _to_float(row[3] if len(row) > 3 else 0)
+            cy_dr  = cy_net if cy_net >= 0 else 0.0
+            cy_cr  = abs(cy_net) if cy_net < 0 else 0.0
+        else:
+            cy_dr  = _to_float(row[2] if len(row) > 2 else 0)
+            cy_cr  = _to_float(row[3] if len(row) > 3 else 0)
+            py_dr  = _to_float(row[4] if len(row) > 4 else 0)
+            py_cr  = _to_float(row[5] if len(row) > 5 else 0)
+            cy_net = cy_dr - cy_cr
+            py_net = py_dr - py_cr
+
+        if not mapping:
+            result.warnings.append(f"Row '{ledger}': no mapping selected — skipped.")
+            continue
+
+        result.rows.append({
+            "ledger_name": ledger,
+            "group_name":  mapping,
+            "cy_debit":    cy_dr,
+            "cy_credit":   cy_cr,
+            "cy_net":      cy_net,
+            "py_net":      py_net,
+            "source":      source_tag,
+        })
+
+    if not result.rows:
+        result.errors.append("No data rows found in template (check rows start from row 3).")
+    return result
+
+
 def import_xlsx(path: Path) -> ImportResult:
+    # Check if this is a FinStruct template first
+    etype = detect_finstruct_template(path)
+    if etype is not None:
+        return import_finstruct_template(path, etype)
+
     result = ImportResult()
     try:
         from openpyxl import load_workbook
@@ -89,8 +200,9 @@ def import_tally_xml(path: Path) -> ImportResult:
             name = ledger.get("NAME") or (ledger.findtext("NAME") or "").strip()
             parent = ledger.findtext("PARENT") or ""
             cl_bal_txt = ledger.findtext("CLOSINGBALANCE") or "0"
-            is_dr = "Dr" in cl_bal_txt or "DR" in cl_bal_txt
-            net = _to_float(cl_bal_txt.replace("Dr", "").replace("CR", "").replace("Cr", ""))
+            norm_bal = cl_bal_txt.lower().replace(".", "").strip()
+            is_dr = "dr" in norm_bal
+            net = _to_float(cl_bal_txt.replace("Dr.", "").replace("Cr.", "").replace("Dr", "").replace("CR", "").replace("Cr", ""))
             if not is_dr:
                 net = -net
             if name:

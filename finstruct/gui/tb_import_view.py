@@ -6,6 +6,7 @@ from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 from ..config import THEME as T
 from ..core.tb_importer import import_xlsx, import_csv, import_tally_xml
+from ..core.tb_template_generator import generate as generate_tb_template
 from ..gui.theme import primary_btn, secondary_btn, label
 
 
@@ -22,6 +23,15 @@ class TBImportView(ttk.Frame):
         top = ttk.Frame(self)
         top.pack(fill="x", padx=8, pady=6)
         label(top, "2.  Import Trial Balance", style="Sec.TLabel").pack(side="left")
+
+        # Template download bar
+        tmpl = ttk.Frame(self)
+        tmpl.pack(fill="x", padx=8, pady=(4, 0))
+        label(tmpl, "No TB file yet?").pack(side="left", padx=4)
+        secondary_btn(tmpl, "📥  Download TB Template for this entity",
+                      command=self._download_template).pack(side="left", padx=4)
+        label(tmpl, "Fill in Excel, then import back here.",
+              style="Muted.TLabel").pack(side="left", padx=6)
 
         # File picker
         pick = ttk.Frame(self)
@@ -65,6 +75,45 @@ class TBImportView(ttk.Frame):
                   style="Muted.TLabel").pack(side="left")
         primary_btn(bot, "✔ Confirm & Proceed  →", command=self._confirm).pack(side="right")
         secondary_btn(bot, "Clear / Re-import", command=self._clear).pack(side="right", padx=6)
+
+    def _download_template(self):
+        entity_type = "COMPANY"
+        try:
+            entity_type = self._db.get_entity_type() or "COMPANY"
+        except Exception:
+            pass
+        entity_type = entity_type.upper()
+
+        default_name = f"TB_Template_{entity_type}.xlsx"
+        try:
+            entity_name = self._db.get_entity_name() or entity_type
+            fy = self._db.get_fy() or ""
+            if fy:
+                default_name = f"{entity_name}_TB_Template_{fy}.xlsx"
+        except Exception:
+            pass
+
+        save_path = filedialog.asksaveasfilename(
+            title="Save TB Template",
+            defaultextension=".xlsx",
+            initialfile=default_name,
+            filetypes=[("Excel Workbook", "*.xlsx")],
+        )
+        if not save_path:
+            return
+        try:
+            generate_tb_template(entity_type, Path(save_path))
+            messagebox.showinfo(
+                "Template Saved",
+                f"✅ TB Template saved to:\n{save_path}\n\n"
+                "Open in Excel:\n"
+                " • Col A — enter your ledger names\n"
+                " • Col B — select the mapping from the dropdown\n"
+                " • Cols C/D (or C–F for NCE) — enter amounts\n\n"
+                "Then import the file back here.",
+            )
+        except Exception as e:
+            messagebox.showerror("Template Error", f"Failed to generate template:\n{e}")
 
     def _browse(self):
         path = filedialog.askopenfilename(

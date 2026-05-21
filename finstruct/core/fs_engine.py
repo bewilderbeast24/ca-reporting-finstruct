@@ -498,7 +498,7 @@ class FSEngine:
     def _aop_rp(self) -> list[FSLine]:
         lines = [_hdr("RECEIPT AND PAYMENT ACCOUNT"), _blank()]
         lines.append(_sec("RECEIPTS"))
-        cash_op_cy = 0.0  # opening balance from rollover
+        cash_op_cy = self._py("AO011") + self._py("AO012")
         lines.append(_line("Opening Balance (Cash & Bank)", cash_op_cy, 0, indent=1))
         mi_cy = self._cy("AI001")
         lines.append(_line("Maintenance Charges Received", mi_cy, 0, indent=1))
@@ -580,11 +580,13 @@ class FSEngine:
     def _trust_rp(self) -> list[FSLine]:
         lines = [_hdr("RECEIPT AND PAYMENT ACCOUNT"), _blank()]
         lines.append(_sec("RECEIPTS"))
+        cash_op_cy = self._py("TR009") + self._py("TR010")
+        lines.append(_line("Opening Balance (Cash & Bank)", cash_op_cy, 0, indent=1))
         don_cy = self._cy("TI001") + self._cy("TI002")
         lines.append(_line("Donations & Grants Received", don_cy, 0, indent=1))
         oi_cy = self._cy("TI003") + self._cy("TI004")
         lines.append(_line("Other Receipts", oi_cy, 0, indent=1))
-        tot_rec = don_cy + oi_cy
+        tot_rec = cash_op_cy + don_cy + oi_cy
         lines.append(_grand("TOTAL RECEIPTS", tot_rec, 0))
         lines.append(_blank())
         lines.append(_sec("PAYMENTS"))
