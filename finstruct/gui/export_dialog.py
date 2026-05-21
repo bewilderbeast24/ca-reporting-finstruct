@@ -35,19 +35,48 @@ class ExportDialog(tk.Toplevel):
                   style="Sec.TLabel").pack(padx=16, pady=(14, 4), anchor="w")
         ttk.Separator(self, orient="horizontal").pack(fill="x", padx=16, pady=4)
 
+        # Get entity type and turnover to determine which report options to show
+        em = self._db.get_all_entity()
+        meta = self._db.get_all_meta()
+        entity_type = meta.get("entity_type", "COMPANY")
+
+        # Calculate turnover from trial balance (PL001 = Revenue from Operations)
+        turnover = 0.0
+        try:
+            wtb_rows = self._db.get_wtb()
+            for row in wtb_rows:
+                if row.get("mapping_code") == "PL001":
+                    turnover = float(row.get("cy_net", 0) or 0)
+                    break
+        except Exception:
+            pass
+
         # Format checkboxes
         self._do_pdf  = tk.BooleanVar(value=True)
         self._do_xlsx = tk.BooleanVar(value=True)
         self._do_docx = tk.BooleanVar(value=False)
         self._is_draft= tk.BooleanVar(value=True)
 
-        for text, var in [
-            ("📄  PDF (Print-ready Financial Statements)", self._do_pdf),
-            ("📊  XLSX (Excel — FS + Notes workbook)",     self._do_xlsx),
-            ("📝  DOCX (Directors Report + Audit Report)", self._do_docx),
-        ]:
-            ttk.Checkbutton(self, text=text, variable=var,
-                            style="TCheckbutton").pack(anchor="w", padx=24, pady=3)
+        ttk.Checkbutton(self, text="📄  PDF (Print-ready Financial Statements)",
+                       variable=self._do_pdf, style="TCheckbutton").pack(anchor="w", padx=24, pady=3)
+        ttk.Checkbutton(self, text="📊  XLSX (Excel — FS + Notes workbook)",
+                       variable=self._do_xlsx, style="TCheckbutton").pack(anchor="w", padx=24, pady=3)
+
+        # DOCX options: show Audit Report for Companies and LLPs with turnover > 40 lacs
+        # Show Directors Report only for Companies
+        docx_label = "📝  DOCX ("
+        if entity_type == "COMPANY":
+            docx_label += "Directors Report + Audit Report)"
+        elif entity_type == "LLP" and turnover > 4000000:
+            docx_label += "Audit Report)"
+        else:
+            docx_label += "Audit Report - Not Applicable)"
+            self._do_docx.set(False)
+
+        docx_enabled = (entity_type == "COMPANY") or (entity_type == "LLP" and turnover > 4000000)
+        ttk.Checkbutton(self, text=docx_label,
+                       variable=self._do_docx, style="TCheckbutton",
+                       state="normal" if docx_enabled else "disabled").pack(anchor="w", padx=24, pady=3)
 
         ttk.Separator(self, orient="horizontal").pack(fill="x", padx=16, pady=8)
         ttk.Checkbutton(self, text="Mark as DRAFT (watermark on PDF)",
