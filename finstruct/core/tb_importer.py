@@ -190,6 +190,47 @@ def import_csv(path: Path) -> ImportResult:
     return result
 
 
+def get_raw_headers_and_rows(path: Path) -> tuple[list[str], list[list]]:
+    """Return (headers, first_8_rows) for column mapping wizard."""
+    suffix = path.suffix.lower()
+    try:
+        if suffix in (".xlsx", ".xls"):
+            from openpyxl import load_workbook
+            wb = load_workbook(path, read_only=True, data_only=True)
+            ws = wb.active
+            all_rows = list(ws.iter_rows(values_only=True))
+            wb.close()
+            if not all_rows:
+                return [], []
+            headers = [str(c or "") for c in all_rows[0]]
+            data = [[str(v or "") for v in row] for row in all_rows[1:9]]
+            return headers, data
+        elif suffix in (".csv", ".txt"):
+            import csv as _csv, io as _io
+            raw = path.read_bytes()
+            text = raw.decode("utf-8-sig", errors="replace")
+            dialect = _csv.Sniffer().sniff(text[:4096], delimiters=",\t;|")
+            reader = _csv.reader(_io.StringIO(text), dialect)
+            rows = list(reader)
+            if not rows:
+                return [], []
+            return rows[0], rows[1:9]
+    except Exception:
+        pass
+    return [], []
+
+
+def get_auto_col_map(headers: list[str]) -> dict[str, int | None]:
+    return {
+        "ledger": _detect_col(headers, COMMON_LEDGER_HEADERS),
+        "group":  _detect_col(headers, COMMON_GROUP_HEADERS),
+        "debit":  _detect_col(headers, COMMON_DR_HEADERS),
+        "credit": _detect_col(headers, COMMON_CR_HEADERS),
+        "net":    _detect_col(headers, COMMON_NET_HEADERS),
+        "py_net": _detect_col(headers, COMMON_PYNET_HEADERS),
+    }
+
+
 def import_tally_xml(path: Path) -> ImportResult:
     result = ImportResult()
     try:
