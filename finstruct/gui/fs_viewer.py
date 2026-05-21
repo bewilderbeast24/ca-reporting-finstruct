@@ -16,12 +16,19 @@ def _fmt(v: float | None) -> str:
 
 
 class FSViewer(ttk.Frame):
-    def __init__(self, parent, doc: FSDocument, db, on_proceed: callable = None):
+    def __init__(self, parent, doc: FSDocument, db,
+                 on_proceed: callable = None,
+                 rebuild_cf: callable = None,
+                 is_small_company: bool = False):
         super().__init__(parent)
         self._doc = doc
         self._db  = db
         self._on_proceed = on_proceed
+        self._rebuild_cf = rebuild_cf
+        self._is_small   = is_small_company
         self._grids: dict[str, EditableGrid] = {}
+        self._nb: ttk.Notebook | None = None
+        self._include_cf = tk.BooleanVar(value=True)
         self._build()
 
     def _build(self):
@@ -29,10 +36,31 @@ class FSViewer(ttk.Frame):
         top.pack(fill="x", padx=8, pady=6)
         label(top, "6.  Financial Statements", style="Sec.TLabel").pack(side="left")
         secondary_btn(top, "Save Overrides", command=self._save_overrides).pack(side="left", padx=8)
+
+        # Cash Flow toggle — visible for COMPANY/SEC8 with small-co note
+        et = self._doc.entity_type
+        if et in ("COMPANY", "SEC8"):
+            cf_frame = ttk.Frame(top)
+            cf_frame.pack(side="left", padx=12)
+            cb = ttk.Checkbutton(cf_frame, text="Include Cash Flow Statement",
+                                 variable=self._include_cf,
+                                 command=self._on_cf_toggle)
+            cb.pack(side="left")
+            if self._is_small:
+                label(cf_frame, "(optional — small company)", style="Muted.TLabel").pack(side="left", padx=4)
+
         primary_btn(top, "→ Generate Notes  F10", command=self._go_notes).pack(side="right", padx=4)
 
-        nb = ttk.Notebook(self)
-        nb.pack(fill="both", expand=True, padx=8, pady=4)
+        self._nb = ttk.Notebook(self)
+        self._nb.pack(fill="both", expand=True, padx=8, pady=4)
+        self._populate_tabs()
+
+    def _populate_tabs(self):
+        nb = self._nb
+        # Remove all existing tabs
+        for tab in nb.tabs():
+            nb.forget(tab)
+        self._grids.clear()
 
         statement_map = [
             ("bs", "Balance Sheet"),
@@ -42,6 +70,8 @@ class FSViewer(ttk.Frame):
             ("cf", "Cash Flow"),
         ]
         for attr, title in statement_map:
+            if attr == "cf" and not self._include_cf.get():
+                continue
             lines = getattr(self._doc, attr, [])
             if not lines:
                 continue
@@ -49,6 +79,16 @@ class FSViewer(ttk.Frame):
             nb.add(frame, text=title)
             grid = self._make_grid(frame, lines, attr)
             self._grids[attr] = grid
+
+    def _on_cf_toggle(self):
+        include = self._include_cf.get()
+        if self._rebuild_cf:
+            self._doc.cf = self._rebuild_cf(include)
+        else:
+            # Fallback: if no rebuild callback, just hide/show existing data
+            if not include:
+                self._doc.cf = []
+        self._populate_tabs()
 
     def _make_grid(self, parent, lines: list[FSLine], section: str) -> EditableGrid:
         cols = [
