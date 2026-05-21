@@ -238,6 +238,13 @@ def export_pdf(doc: FSDocument, notes: list[Note], output_path: Path,
             canvas.restoreState()
         canvas.restoreState()
 
+    # FY "2024-25" → year_end = 2025 (balance sheet / year-end date)
+    try:
+        _fy_parts = fy.split("-")
+        year_end = str(int(_fy_parts[0]) + 1)
+    except Exception:
+        year_end = _fy_parts[0] if _fy_parts else fy
+
     story = []
 
     def _entity_header(title: str):
@@ -282,32 +289,32 @@ def export_pdf(doc: FSDocument, notes: list[Note], output_path: Path,
 
     # Balance Sheet
     if doc.bs:
-        _entity_header(f"Balance Sheet as at 31st March, {fy.split('-')[0][2:]}")
+        _entity_header(f"Balance Sheet as at 31st March, {year_end}")
         story.append(_fs_table(doc.bs, "BS"))
         _footer_table()
         story.append(PageBreak())
 
     # P&L or I&E
     if doc.pl:
-        _entity_header(f"Statement of Profit and Loss for the year ended 31st March, {fy.split('-')[0][2:]}")
+        _entity_header(f"Statement of Profit and Loss for the year ended 31st March, {year_end}")
         story.append(_fs_table(doc.pl, "PL"))
         _footer_table()
         story.append(PageBreak())
     if doc.ie:
-        _entity_header(f"Income and Expenditure Account for the year ended 31st March, {fy.split('-')[0][2:]}")
+        _entity_header(f"Income and Expenditure Account for the year ended 31st March, {year_end}")
         story.append(_fs_table(doc.ie, "IE"))
         _footer_table()
         story.append(PageBreak())
 
     # R&P
     if doc.rp:
-        _entity_header(f"Receipt and Payment Account for the year ended 31st March, {fy.split('-')[0][2:]}")
+        _entity_header(f"Receipt and Payment Account for the year ended 31st March, {year_end}")
         story.append(_fs_table(doc.rp, "RP"))
         story.append(PageBreak())
 
     # Cash Flow
     if doc.cf:
-        _entity_header(f"Cash Flow Statement for the year ended 31st March, {fy.split('-')[0][2:]}")
+        _entity_header(f"Cash Flow Statement for the year ended 31st March, {year_end}")
         story.append(_fs_table(doc.cf, "CF"))
         story.append(PageBreak())
 

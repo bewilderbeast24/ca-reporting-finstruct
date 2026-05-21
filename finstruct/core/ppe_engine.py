@@ -8,7 +8,7 @@ def calc_slm(gross_op: float, additions: float, disposals: float,
              dep_op: float, dep_disposal: float,
              rate: float | None = None, life_yrs: int = 10) -> dict:
     gross_cl = gross_op + additions - disposals
-    annual_dep = (gross_op + additions) / life_yrs if life_yrs else 0
+    annual_dep = gross_cl / life_yrs if life_yrs else 0
     dep_charge = round(annual_dep, 2)
     dep_cl = dep_op + dep_charge - dep_disposal
     nbv_cy = gross_cl - dep_cl

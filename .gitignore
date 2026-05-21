@@ -17,6 +17,7 @@ env/
 build/
 dist/
 *.spec.bak
+*_dist.zip
 
 # OS
 .DS_Store
