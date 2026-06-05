@@ -13,9 +13,10 @@ from ..gui.theme import primary_btn, secondary_btn, label
 class ColumnMappingDialog(tk.Toplevel):
     """Modal dialog: shows file headers + preview rows, lets user map each column."""
 
-    ROLES = ["— Ignore —", "Ledger Name", "Group / Mapping", "Debit (Dr)",
+    ROLES = ["— Ignore —", "Ledger Name", "Group / Mapping",
+             "SubType / Sch III Sub-heading", "Debit (Dr)",
              "Credit (Cr)", "Net Balance (CY)", "Net Balance (PY)"]
-    ROLE_KEYS = [None, "ledger", "group", "debit", "credit", "net", "py_net"]
+    ROLE_KEYS = [None, "ledger", "group", "subtype", "debit", "credit", "net", "py_net"]
 
     def __init__(self, parent, headers: list[str], preview_rows: list[list],
                  auto_map: dict[str, int | None]):
@@ -360,9 +361,31 @@ class TBImportView(ttk.Frame):
                 return
         self._db.clear_raw_tb()
         self._db.insert_raw_tb_batch(self._import_result.rows)
-        self._db.log("TB_IMPORTED", f"{len(self._import_result.rows)} rows from {self._path.name}")
+
+        # Apply SubType auto-mapping hints (confidence 1.0, source=SUBTYPE, auto-confirmed)
+        hints = getattr(self._import_result, "subtype_hints", {}) or {}
+        applied = 0
+        if hints:
+            raw_rows = self._db.get_raw_tb()
+            ordered_ids = [r["id"] for r in raw_rows]
+            for row_idx, code in hints.items():
+                if row_idx >= len(ordered_ids):
+                    continue
+                raw_id = ordered_ids[row_idx]
+                src_row = self._import_result.rows[row_idx]
+                self._db.upsert_wtb(
+                    raw_id, code, 1.0, "SUBTYPE",
+                    src_row["cy_net"], src_row["py_net"], confirmed=1,
+                )
+                applied += 1
+
+        self._db.log("TB_IMPORTED",
+                     f"{len(self._import_result.rows)} rows from {self._path.name}"
+                     + (f"; auto-mapped {applied} via SubType" if applied else ""))
         messagebox.showinfo("Imported",
-                            f"✅ {len(self._import_result.rows)} ledgers imported successfully.")
+                            f"✅ {len(self._import_result.rows)} ledgers imported."
+                            + (f"\n✨ {applied} auto-mapped from SubType column."
+                               if applied else ""))
         if self._on_complete:
             self._on_complete()
 

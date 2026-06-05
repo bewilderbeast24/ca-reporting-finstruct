@@ -49,6 +49,7 @@ class NotesEngine:
         return round(sum(self._py(c) for c in codes), 2)
 
     def generate_all(self) -> list[Note]:
+        """Generate notes WITHOUT renumbering — preserves FS line ↔ note number links."""
         if self._etype in ("COMPANY", "SEC8"):
             return self._company_notes()
         elif self._etype in ("PROP", "PART", "LLP"):
@@ -58,6 +59,54 @@ class NotesEngine:
         elif self._etype in ("TRUST",):
             return self._trust_notes()
         return []
+
+    def generate_dynamic(self, doc=None) -> tuple[list[Note], dict[int, int]]:
+        """xlsm-style: skip empty notes + renumber sequentially.
+
+        Returns (notes, old_to_new_map). If `doc` is given, mutates its FSLines
+        to remap each `.note` attribute via the mapping so labels stay in sync.
+
+        Notes 1 & 2 are reserved (Accounting Policies / General Info).
+        """
+        raw_notes = self.generate_all()
+        kept: list[Note] = []
+        mapping: dict[int, int] = {}
+        next_num = 3
+        for note in raw_notes:
+            if note.number in (1, 2):
+                mapping[note.number] = note.number
+                kept.append(note)
+                continue
+            has_data = any(
+                (abs(getattr(line, "cy", 0) or 0) > 0.005 or
+                 abs(getattr(line, "py", 0) or 0) > 0.005)
+                for line in note.lines
+            )
+            if not has_data:
+                title_lower = note.title.lower()
+                placeholder_keep = any(k in title_lower for k in (
+                    "related party", "contingent", "events after",
+                    "earnings per share", "accounting polic", "general info",
+                ))
+                if not placeholder_keep:
+                    continue
+            old_no = note.number
+            mapping[old_no] = next_num
+            note.number = next_num
+            next_num += 1
+            kept.append(note)
+        if doc is not None:
+            for section in ("bs", "pl", "ie", "rp", "cf"):
+                lines = getattr(doc, section, None) or []
+                for line in lines:
+                    if line.note is None:
+                        continue
+                    if line.note in mapping:
+                        line.note = mapping[line.note]
+                    else:
+                        # Note was dropped (had no data) — clear stale reference
+                        line.note = None
+        return kept, mapping
 
     # ─── Company Notes ─────────────────────────────────────────────────────
 

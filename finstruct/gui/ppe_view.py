@@ -128,20 +128,79 @@ class PPEView(ttk.Frame):
             self._db.upsert_ppe(r)
         self._load()
 
+    # Entity-type-aware depreciation account mapping (Dr expense / Cr asset-dep)
+    DEP_CODES = {
+        "COMPANY": ("PL025", "AS002", "PL026", "AS005"),  # tang_dep, acc_dep, intang_amort, acc_amort
+        "SEC8":    ("PL025", "AS002", "PL026", "AS005"),
+        "LLP":     ("LL025", "LL010", "LL025", "LL011"),
+        "PROP":    ("NP008", "NC012", "NP008", "NC013"),
+        "PART":    ("NP008", "NC012", "NP008", "NC013"),
+        "AOP":     ("AE004", "AO009", "AE004", "AO009"),
+        "TRUST":   ("TE004", "TR007", "TE004", "TR007"),
+    }
+
+    def _is_intangible(self, asset: dict) -> bool:
+        cat = (asset.get("category", "") or "").lower()
+        return "intangible" in cat or "software" in cat or "goodwill" in cat
+
     def _post_dep(self):
         tot = summarize_ppe(self._assets)
         dep = tot["dep_charge"]
         if dep == 0:
-            messagebox.showinfo("No Depreciation", "No depreciation calculated yet.")
+            messagebox.showinfo("No Depreciation",
+                                "No depreciation calculated yet.\n"
+                                "Add asset rows with gross_op / useful_life filled in first.")
             return
-        adj_id = f"AJE-DEP-{__import__('datetime').datetime.now().strftime('%d%m%H%M')}"
-        self._db.add_adjustment(adj_id, "Depreciation & Amortisation Expense",
-                                "NP008", dep, 0, "Depreciation per FA Register")
-        self._db.add_adjustment(adj_id + "b", "Accumulated Depreciation",
-                                "AS002", 0, dep, "Depreciation per FA Register")
-        self._db.log("DEP_POSTED", f"₹{dep:,.2f}")
-        messagebox.showinfo("Posted",
-                            f"✅ Depreciation entry ₹{dep:,.2f} posted.\nEntry ID: {adj_id}")
+
+        et = (self._db.get_meta("entity_type") or "COMPANY").upper()
+        dep_codes = self.DEP_CODES.get(et, self.DEP_CODES["COMPANY"])
+        tang_dr, tang_cr, intang_dr, intang_cr = dep_codes
+
+        # Split tangible vs intangible
+        tang_dep = sum(float(a.get("dep_charge", 0) or 0)
+                       for a in self._assets if not self._is_intangible(a))
+        intang_dep = sum(float(a.get("dep_charge", 0) or 0)
+                         for a in self._assets if self._is_intangible(a))
+
+        # Confirm if re-posting
+        existing = [a for a in self._db.get_adjustments()
+                    if a["adj_id"] and a["adj_id"].startswith("DEP-")]
+        if existing:
+            if not messagebox.askyesno(
+                "Re-post Depreciation",
+                f"Found {len(existing)} prior depreciation adjustment(s).\n"
+                f"Replace with fresh entries totalling ₹{dep:,.2f}?"):
+                return
+            self._db.delete_dep_adjustments()
+
+        from datetime import datetime
+        ts = datetime.now().strftime("%Y%m%d%H%M%S")
+        entries = []
+        if tang_dep > 0.01:
+            self._db.add_adjustment(
+                f"DEP-TANG-DR-{ts}", "Depreciation on Tangible Assets",
+                tang_dr, tang_dep, 0, "Depreciation per PPE Register (Tangible)")
+            self._db.add_adjustment(
+                f"DEP-TANG-CR-{ts}", "Accumulated Depreciation",
+                tang_cr, 0, tang_dep, "Depreciation per PPE Register (Tangible)")
+            entries.append(f"Tangible: ₹{tang_dep:,.2f}")
+        if intang_dep > 0.01:
+            self._db.add_adjustment(
+                f"DEP-INT-DR-{ts}", "Amortisation of Intangible Assets",
+                intang_dr, intang_dep, 0, "Amortisation per PPE Register")
+            self._db.add_adjustment(
+                f"DEP-INT-CR-{ts}", "Accumulated Amortisation",
+                intang_cr, 0, intang_dep, "Amortisation per PPE Register")
+            entries.append(f"Intangible: ₹{intang_dep:,.2f}")
+
+        self._db.log("DEP_POSTED", f"Total ₹{dep:,.2f}; entity={et}")
+        messagebox.showinfo(
+            "Posted",
+            f"✅ Depreciation posted (Total ₹{dep:,.2f}):\n  " + "\n  ".join(entries)
+            + f"\n\nEntity: {et}\n"
+            + f"Dr {tang_dr} / Cr {tang_cr} (tangible)"
+            + (f"\nDr {intang_dr} / Cr {intang_cr} (intangible)" if intang_dep > 0 else "")
+        )
         if self._on_dep_posted:
             self._on_dep_posted(dep)
 

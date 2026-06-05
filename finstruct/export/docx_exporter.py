@@ -30,12 +30,63 @@ def _para(doc: Document, text: str, bold: bool = False, italic: bool = False):
     return p
 
 
+OPINION_PARAGRAPHS = {
+    "Unmodified": (
+        "In our opinion and to the best of our information and according to the explanations "
+        "given to us, the aforesaid financial statements give the information required by the "
+        "Companies Act, 2013 in the manner so required and give a true and fair view in conformity "
+        "with the accounting principles generally accepted in India of the state of affairs of the "
+        "Company as at 31st March {{FY_END_YEAR}}, and of its profit / (loss) and cash flows for "
+        "the year ended on that date."
+    ),
+    "Qualified": (
+        "In our opinion and to the best of our information and according to the explanations given "
+        "to us, **except for the effects of the matters described in the Basis for Qualified "
+        "Opinion paragraph above**, the aforesaid financial statements give the information "
+        "required by the Companies Act, 2013 in the manner so required and give a true and fair "
+        "view in conformity with the accounting principles generally accepted in India of the "
+        "state of affairs of the Company as at 31st March {{FY_END_YEAR}}, and of its profit / (loss) "
+        "and cash flows for the year ended on that date."
+    ),
+    "Adverse": (
+        "In our opinion, **because of the significance of the matters described in the Basis for "
+        "Adverse Opinion paragraph above**, the aforesaid financial statements do NOT give a true "
+        "and fair view in conformity with the accounting principles generally accepted in India "
+        "of the state of affairs of the Company as at 31st March {{FY_END_YEAR}}, or of its profit / "
+        "(loss) and cash flows for the year ended on that date."
+    ),
+    "Disclaimer": (
+        "**We do not express an opinion** on the accompanying financial statements of the Company. "
+        "Because of the significance of the matters described in the Basis for Disclaimer of "
+        "Opinion paragraph above, we have not been able to obtain sufficient appropriate audit "
+        "evidence to provide a basis for an audit opinion on these financial statements."
+    ),
+}
+
+
 def _fill(template: str, em: dict, extras: dict | None = None) -> str:
+    fy = em.get("financial_year", "")
+    # Derive FY end year: "2024-25" → "2025"
+    fy_end = ""
+    if fy and "-" in fy:
+        parts = fy.split("-")
+        try:
+            start = int(parts[0])
+            fy_end = str(start + 1)
+        except ValueError:
+            fy_end = parts[-1]
+    opinion = em.get("opinion_type", "Unmodified")
+    opinion_para = OPINION_PARAGRAPHS.get(opinion, OPINION_PARAGRAPHS["Unmodified"])
+
     subs = {
         "{{COMPANY_NAME}}":   em.get("entity_name", em.get("Company_Name", "[Company]")),
         "{{CIN}}":            em.get("cin", em.get("CIN", "")),
         "{{ADDRESS}}":        em.get("address", em.get("Registered_Office", "")),
-        "{{FY}}":             em.get("financial_year", ""),
+        "{{FY}}":             fy,
+        "{{FY_END_YEAR}}":    fy_end,
+        "{{OPINION_TYPE}}":   opinion,
+        "{{OPINION_PARA}}":   opinion_para,
+        "{{UDIN}}":           em.get("udin", ""),
         "{{SIGN_DATE}}":      em.get("signing_date", em.get("Signing_Date",
                                      datetime.now().strftime("%d %B %Y"))),
         "{{SIGN_PLACE}}":     em.get("signing_place", em.get("Signing_Place", "")),
@@ -52,6 +103,8 @@ def _fill(template: str, em: dict, extras: dict | None = None) -> str:
         subs.update(extras)
     for k, v in subs.items():
         template = template.replace(k, v or "")
+    # Replace OPINION section AFTER substitution so opinion paragraph also gets {{FY_END_YEAR}} subbed
+    template = template.replace("{{FY_END_YEAR}}", fy_end)
     return template
 
 
@@ -119,13 +172,13 @@ The Members,
 
 REPORT ON THE AUDIT OF THE FINANCIAL STATEMENTS
 
-OPINION
-We have audited the accompanying financial statements of {{COMPANY_NAME}} (CIN: {{CIN}}), which comprise the Balance Sheet as at 31st March, the Statement of Profit and Loss and the Cash Flow Statement for the year then ended, and notes to the financial statements, including a summary of significant accounting policies.
+OPINION ({{OPINION_TYPE}})
+We have audited the accompanying financial statements of {{COMPANY_NAME}} (CIN: {{CIN}}), which comprise the Balance Sheet as at 31st March {{FY_END_YEAR}}, the Statement of Profit and Loss and the Cash Flow Statement for the year then ended, and notes to the financial statements, including a summary of significant accounting policies.
 
-In our opinion and to the best of our information and according to the explanations given to us, the aforesaid financial statements give the information required by the Companies Act, 2013 in the manner so required and give a true and fair view in conformity with the accounting principles generally accepted in India of the state of affairs of the Company as at 31st March, and of its profit / loss and cash flows for the year ended on that date.
+{{OPINION_PARA}}
 
 BASIS FOR OPINION
-We conducted our audit in accordance with the Standards on Auditing (SAs) specified under section 143(10) of the Companies Act, 2013.
+We conducted our audit in accordance with the Standards on Auditing (SAs) specified under section 143(10) of the Companies Act, 2013. Our responsibilities under those Standards are further described in the Auditor's Responsibilities for the Audit of the Financial Statements section of our report. We are independent of the Company in accordance with the Code of Ethics issued by the Institute of Chartered Accountants of India, and we have fulfilled our other ethical responsibilities in accordance with these requirements. We believe that the audit evidence we have obtained is sufficient and appropriate to provide a basis for our opinion.
 
 KEY AUDIT MATTERS
 [Insert key audit matters if applicable]
@@ -154,6 +207,7 @@ FRN: {{AUDITOR_FRN}}
 {{AUDITOR_PARTNER}}
 Partner
 Membership No.: {{AUDITOR_MRN}}
+UDIN: {{UDIN}}
 
 Place: {{SIGN_PLACE}}
 Date: {{SIGN_DATE}}

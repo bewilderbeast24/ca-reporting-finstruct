@@ -52,8 +52,13 @@ class MappingView(ttk.Frame):
         from .fs_grid_view import EditableGrid
         self._grid = EditableGrid(self, columns=cols,
                                   on_cell_change=self._on_cell_change,
-                                  editable_cols={"mapped"})
+                                  editable_cols={"py"})
         self._grid.pack(fill="both", expand=True, padx=8, pady=4)
+
+        # Hint: PY editing
+        ttk.Label(self,
+                  text="💡 Double-click any 'PY Amount ₹' cell to enter Previous Year figures.",
+                  style="Muted.TLabel").pack(fill="x", padx=8, pady=(0, 4))
 
         # Override panel (shown when row is selected)
         self._ovr_frame = ttk.Frame(self, style="Card.TFrame", padding=6)
@@ -244,4 +249,20 @@ class MappingView(ttk.Frame):
         self._render()
 
     def _on_cell_change(self, iid: str, col_id: str, new_val: str):
-        pass  # direct text edit in mapped col — find code by lookup_name
+        if col_id != "py":
+            return
+        try:
+            cleaned = new_val.replace(",", "").replace("₹", "").strip()
+            py_val = float(cleaned) if cleaned and cleaned != "—" else 0.0
+        except ValueError:
+            return
+        for row in self._rows:
+            if str(row["raw_tb_id"]) == iid:
+                row["py"] = py_val
+                # Save immediately so PY persists even before "Confirm"
+                self._db.upsert_wtb(
+                    row["raw_tb_id"], row["code"],
+                    row["conf"], row["source"],
+                    row["cy"], py_val, int(row["confirmed"]),
+                )
+                break

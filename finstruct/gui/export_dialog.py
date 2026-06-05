@@ -163,9 +163,9 @@ class ExportDialog(tk.Toplevel):
             for a in ppe_data:
                 a.update(recalc_asset(a))
 
-            # Notes
+            # Notes (with dynamic numbering — also updates doc's note references)
             ne     = NotesEngine(totals, et, ppe_data, div, em)
-            notes  = ne.generate_all()
+            notes, _ = ne.generate_dynamic(doc)
 
             # Apply overrides
             for section in ("BS","PL","IE","RP","CF"):

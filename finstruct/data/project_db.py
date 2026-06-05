@@ -13,7 +13,7 @@ from .encryption import encrypt, decrypt
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 PII_KEYS = {
     "pan", "cin", "llpin", "address", "reg_addr", "pan_no",
@@ -130,6 +130,15 @@ class ProjectDB:
             is_signing_auth INTEGER DEFAULT 1,
             sort_order INTEGER DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS annexure_rows (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            annexure_code TEXT NOT NULL,
+            label TEXT NOT NULL,
+            cy_value REAL DEFAULT 0,
+            py_value REAL DEFAULT 0,
+            sort_order INTEGER DEFAULT 0,
+            UNIQUE(annexure_code, label)
+        );
         """)
         c.commit()
         if not self.get_meta("schema_version"):
@@ -138,6 +147,8 @@ class ProjectDB:
         ver = int(self.get_meta("schema_version") or "1")
         if ver < 2:
             self._migrate_v2()
+        if ver < 3:
+            self._migrate_v3()
         self.migrate_legacy_directors()
 
     def _migrate_v2(self):
@@ -168,6 +179,55 @@ class ProjectDB:
             log.info("DB migrated to v2: wtb.raw_tb_id is now UNIQUE")
         except Exception as e:
             log.error("Migration v2 failed: %s", e)
+
+    def _migrate_v3(self):
+        """Add annexure_rows table (no destructive change)."""
+        try:
+            self._conn.executescript("""
+            CREATE TABLE IF NOT EXISTS annexure_rows (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                annexure_code TEXT NOT NULL,
+                label TEXT NOT NULL,
+                cy_value REAL DEFAULT 0,
+                py_value REAL DEFAULT 0,
+                sort_order INTEGER DEFAULT 0,
+                UNIQUE(annexure_code, label)
+            );
+            """)
+            self._conn.commit()
+            self.set_meta("schema_version", "3")
+            log.info("DB migrated to v3: annexure_rows table added")
+        except Exception as e:
+            log.error("Migration v3 failed: %s", e)
+
+    # ── Annexures ────────────────────────────────────────────────────────
+    def get_annexure_rows(self, annexure_code: str) -> list:
+        return self._conn.execute(
+            "SELECT label,cy_value,py_value FROM annexure_rows "
+            "WHERE annexure_code=? ORDER BY sort_order, id",
+            (annexure_code,)
+        ).fetchall()
+
+    def save_annexure_rows(self, annexure_code: str, rows: list[dict]):
+        with self._tx():
+            self._conn.execute(
+                "DELETE FROM annexure_rows WHERE annexure_code=?", (annexure_code,)
+            )
+            for i, r in enumerate(rows):
+                self._conn.execute(
+                    "INSERT INTO annexure_rows(annexure_code,label,cy_value,py_value,sort_order) "
+                    "VALUES(?,?,?,?,?)",
+                    (annexure_code, r["label"],
+                     float(r.get("cy_value") or 0),
+                     float(r.get("py_value") or 0),
+                     i)
+                )
+
+    def get_all_annexure_codes(self) -> list[str]:
+        rows = self._conn.execute(
+            "SELECT DISTINCT annexure_code FROM annexure_rows"
+        ).fetchall()
+        return [r[0] for r in rows]
 
     # ── Meta ─────────────────────────────────────────────────────────────
     def get_meta(self, key: str) -> str | None:
@@ -331,6 +391,13 @@ class ProjectDB:
 
     def get_adjustments(self) -> list[sqlite3.Row]:
         return self._conn.execute("SELECT * FROM adjustments ORDER BY id").fetchall()
+
+    def delete_dep_adjustments(self):
+        """Idempotent: remove all prior depreciation auto-post entries."""
+        with self._tx():
+            self._conn.execute(
+                "DELETE FROM adjustments WHERE adj_id LIKE 'DEP-%'"
+            )
 
     # ── PPE ──────────────────────────────────────────────────────────────
     def upsert_ppe(self, asset: dict):
