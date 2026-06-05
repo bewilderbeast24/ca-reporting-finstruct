@@ -10,7 +10,8 @@ from ..config import THEME as T
 from ..gui.theme import primary_btn, secondary_btn, label
 from ..core.fs_engine import FSEngine, FSDocument
 from ..core.notes_engine import NotesEngine
-from ..core.wtb_engine import aggregate_by_code, build_wtb_lines
+from ..core.wtb_engine import aggregate_by_code, apply_adjustments, build_wtb_lines
+from ..core.master_db import get_lookup_map
 from ..core.ppe_engine import recalc_asset
 
 
@@ -146,11 +147,14 @@ class ExportDialog(tk.Toplevel):
             et   = meta.get("entity_type", "COMPANY")
             div  = int(meta.get("rounding_divisor", "1"))
 
-            # Build FS document
+            # Build FS document (with adjustments)
             wtb_rows = self._db.get_wtb()
             raw_rows = self._db.get_raw_tb()
             lines    = build_wtb_lines(wtb_rows, raw_rows)
             totals   = aggregate_by_code(lines)
+            adj_rows = self._db.get_adjustments()
+            if adj_rows:
+                totals = apply_adjustments(totals, adj_rows, get_lookup_map())
             engine   = FSEngine(et, totals, em, fy, div)
             doc      = engine.generate()
 
@@ -159,9 +163,9 @@ class ExportDialog(tk.Toplevel):
             for a in ppe_data:
                 a.update(recalc_asset(a))
 
-            # Notes
-            ne     = NotesEngine(totals, et, ppe_data, div)
-            notes  = ne.generate_all()
+            # Notes (with dynamic numbering — also updates doc's note references)
+            ne     = NotesEngine(totals, et, ppe_data, div, em)
+            notes, _ = ne.generate_dynamic(doc)
 
             # Apply overrides
             for section in ("BS","PL","IE","RP","CF"):

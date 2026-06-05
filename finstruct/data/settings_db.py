@@ -73,6 +73,16 @@ class SettingsDB:
     def set_api_key(self, key: str):
         self.set("claude_api_key", encrypt(key) if key else "")
 
+    def get_annexure_tolerance(self) -> float:
+        v = self.get("annexure_tolerance", "10")
+        try:
+            return float(v)
+        except ValueError:
+            return 10.0
+
+    def set_annexure_tolerance(self, value: float):
+        self.set("annexure_tolerance", str(value))
+
     # ── Recent Projects ───────────────────────────────────────────────────
     def add_recent(self, path: str, name: str, etype: str, fy: str):
         with self._tx():

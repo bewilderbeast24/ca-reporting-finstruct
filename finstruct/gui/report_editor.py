@@ -29,6 +29,19 @@ class ReportEditor(ttk.Frame):
         secondary_btn(bar, "💾 Save Text", command=self._save).pack(side="left", padx=4)
         secondary_btn(bar, "↺ Reset to Template", command=self._reset).pack(side="left", padx=4)
 
+        # Audit Report — opinion type dropdown
+        if self._type == "audit":
+            ttk.Label(bar, text="Opinion:").pack(side="left", padx=(16, 4))
+            self._opinion_var = tk.StringVar(
+                value=self._db.get_entity("opinion_type") or "Unmodified")
+            opinion_cb = ttk.Combobox(
+                bar, textvariable=self._opinion_var,
+                values=["Unmodified", "Qualified", "Adverse", "Disclaimer"],
+                state="readonly", width=12,
+            )
+            opinion_cb.pack(side="left", padx=4)
+            opinion_cb.bind("<<ComboboxSelected>>", self._on_opinion_change)
+
         # Formatting toolbar
         fmt = ttk.Frame(self)
         fmt.pack(fill="x", padx=6, pady=2)
@@ -153,6 +166,15 @@ class ReportEditor(ttk.Frame):
                 self._text.tag_add("sel", start, end)
                 self._text.see(start)
         ttk.Button(dlg, text="Find", command=do_find).pack(side="left", padx=4)
+
+    def _on_opinion_change(self, *_):
+        opinion = self._opinion_var.get()
+        self._db.set_entity("opinion_type", opinion)
+        # Reload template to reflect new opinion paragraph
+        if messagebox.askyesno(
+                "Reload Template?",
+                f"Opinion set to '{opinion}'.\nReload audit report template with this opinion?"):
+            self._reset()
 
     def get_text(self) -> str:
         return self._text.get("1.0", "end").rstrip()

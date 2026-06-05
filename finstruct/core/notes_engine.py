@@ -26,11 +26,13 @@ def _hl(label) -> FSLine:
 
 class NotesEngine:
     def __init__(self, totals: dict[str, tuple[float, float]], entity_type: str,
-                 ppe_data: list | None = None, divisor: int = 1):
+                 ppe_data: list | None = None, divisor: int = 1,
+                 entity_master: dict | None = None):
         self._t      = totals
         self._etype  = entity_type
         self._ppe    = ppe_data or []
         self._div    = divisor
+        self._em     = entity_master or {}
 
     def _cy(self, code: str) -> float:
         v = self._t.get(code, (0.0, 0.0))[0]
@@ -47,6 +49,7 @@ class NotesEngine:
         return round(sum(self._py(c) for c in codes), 2)
 
     def generate_all(self) -> list[Note]:
+        """Generate notes WITHOUT renumbering — preserves FS line ↔ note number links."""
         if self._etype in ("COMPANY", "SEC8"):
             return self._company_notes()
         elif self._etype in ("PROP", "PART", "LLP"):
@@ -56,6 +59,54 @@ class NotesEngine:
         elif self._etype in ("TRUST",):
             return self._trust_notes()
         return []
+
+    def generate_dynamic(self, doc=None) -> tuple[list[Note], dict[int, int]]:
+        """xlsm-style: skip empty notes + renumber sequentially.
+
+        Returns (notes, old_to_new_map). If `doc` is given, mutates its FSLines
+        to remap each `.note` attribute via the mapping so labels stay in sync.
+
+        Notes 1 & 2 are reserved (Accounting Policies / General Info).
+        """
+        raw_notes = self.generate_all()
+        kept: list[Note] = []
+        mapping: dict[int, int] = {}
+        next_num = 3
+        for note in raw_notes:
+            if note.number in (1, 2):
+                mapping[note.number] = note.number
+                kept.append(note)
+                continue
+            has_data = any(
+                (abs(getattr(line, "cy", 0) or 0) > 0.005 or
+                 abs(getattr(line, "py", 0) or 0) > 0.005)
+                for line in note.lines
+            )
+            if not has_data:
+                title_lower = note.title.lower()
+                placeholder_keep = any(k in title_lower for k in (
+                    "related party", "contingent", "events after",
+                    "earnings per share", "accounting polic", "general info",
+                ))
+                if not placeholder_keep:
+                    continue
+            old_no = note.number
+            mapping[old_no] = next_num
+            note.number = next_num
+            next_num += 1
+            kept.append(note)
+        if doc is not None:
+            for section in ("bs", "pl", "ie", "rp", "cf"):
+                lines = getattr(doc, section, None) or []
+                for line in lines:
+                    if line.note is None:
+                        continue
+                    if line.note in mapping:
+                        line.note = mapping[line.note]
+                    else:
+                        # Note was dropped (had no data) — clear stale reference
+                        line.note = None
+        return kept, mapping
 
     # ─── Company Notes ─────────────────────────────────────────────────────
 
@@ -335,13 +386,13 @@ class NotesEngine:
         ]
         notes.append(n21)
 
-        # Note 22: Other Income
+        # Note 22: Other Income  (PL005=Interest, PL006=Dividend, PL007=Profit on Sale)
         n22 = Note(22, "Other Income")
         oi_codes = ["PL005","PL006","PL007","PL008","PL009"]
         n22.lines = [
-            _dl("Dividend Income", self._cy("PL005"), self._py("PL005")),
-            _dl("Profit on Sale of Assets", self._cy("PL006"), self._py("PL006")),
-            _dl("Interest Income", self._cy("PL007"), self._py("PL007")),
+            _dl("Interest Income", self._cy("PL005"), self._py("PL005")),
+            _dl("Dividend Income", self._cy("PL006"), self._py("PL006")),
+            _dl("Profit on Sale of Assets", self._cy("PL007"), self._py("PL007")),
             _dl("Rental Income", self._cy("PL008"), self._py("PL008")),
             _dl("Miscellaneous / Other Income", self._cy("PL009"), self._py("PL009")),
             _tl("Total", self._sum_cy(oi_codes), self._sum_py(oi_codes)),
@@ -350,12 +401,14 @@ class NotesEngine:
 
         # Note 23: Cost of Materials Consumed
         n23 = Note(23, "Cost of Materials Consumed")
+        cl_cy = self._cy("AS015"); cl_py = self._py("AS015")
         n23.lines = [
             _dl("Opening Stock of Raw Materials", self._cy("PL010"), self._py("PL010")),
             _dl("Add: Purchases during the year", self._cy("PL011"), self._py("PL011")),
-            _dl("Less: Closing Stock of Raw Materials", 0, 0),
-            _tl("Cost of Materials Consumed", self._cy("PL010")+self._cy("PL011"),
-                                               self._py("PL010")+self._py("PL011")),
+            _dl("Less: Closing Stock of Raw Materials", cl_cy, cl_py),
+            _tl("Cost of Materials Consumed",
+                self._cy("PL010") + self._cy("PL011") - cl_cy,
+                self._py("PL010") + self._py("PL011") - cl_py),
         ]
         notes.append(n23)
 
@@ -475,22 +528,38 @@ class NotesEngine:
         ]
         notes.append(n32)
 
-        # Note 33: Earnings Per Share (EPS) — placeholder
+        # Note 33: Earnings Per Share (auto-calculated from P&L totals)
         n33 = Note(33, "Earnings Per Share")
-        pat_cy = self._cy("EL007")   # PAT approximated from retained earnings delta
-        tax_cy = self._cy("PL040") + self._cy("PL041")
-        rev_cy = self._sum_cy(["PL001","PL002","PL003"])
+        pat_cy    = self._calc_pat()
+        paid_up   = float(self._em.get("paid_up_capital") or 0)
+        face_val  = float(self._em.get("face_value_per_share") or 10)
+        shares    = int(paid_up / face_val) if face_val > 0 else 0
+        beps      = round(pat_cy / shares, 2) if shares > 0 else 0.0
         n33.lines = [
             _line("Calculation of EPS (Basic and Diluted):", 0, 0, row_type="SECTION"),
-            _dl("Net Profit/(Loss) attributable to Equity Shareholders (₹)", 0, 0),
-            _dl("Weighted Average Equity Shares outstanding (Nos.)", 0, 0),
-            _dl("Face Value per Share (₹)", 0, 0),
-            _dl("Basic EPS (₹)", 0, 0),
-            _dl("Diluted EPS (₹)", 0, 0),
+            _dl("Net Profit/(Loss) after Tax (₹)", pat_cy, 0),
+            _dl("Weighted Average Equity Shares (Nos.)", float(shares), 0),
+            _dl("Face Value per Share (₹)", face_val, 0),
+            _dl("Basic / Diluted EPS (₹)", beps, 0),
         ]
         notes.append(n33)
 
         return notes
+
+    def _calc_pat(self) -> float:
+        """Derive PAT from P&L totals (mirrors FSEngine._company_pl logic)."""
+        rev  = self._sum_cy(["PL001","PL002","PL003"]) - self._cy("PL004")
+        oi   = self._sum_cy(["PL005","PL006","PL007","PL008","PL009"])
+        cmc  = self._cy("PL010") + self._cy("PL011")
+        pur  = self._cy("PL012")
+        inv  = self._sum_cy(["PL013","PL014"]) - self._sum_cy(["PL015","PL016"])
+        emp  = self._sum_cy(["PL017","PL018","PL019","PL020","PL021"])
+        fin  = self._sum_cy(["PL022","PL023","PL024"])
+        dep  = self._cy("PL025") + self._cy("PL026")
+        oe   = self._sum_cy([f"PL{i:03d}" for i in range(27, 40)])
+        pbt  = rev + oi - cmc - pur - inv - emp - fin - dep - oe
+        tax  = self._cy("PL040") + self._cy("PL041")
+        return round(pbt - tax, 2)
 
     def _ppe_note_lines(self) -> list[FSLine]:
         lines = []

@@ -66,6 +66,30 @@ def aggregate_by_code(lines: list[WTBLine]) -> dict[str, tuple[float, float]]:
     return {k: (v[0], v[1]) for k, v in result.items()}
 
 
+def apply_adjustments(
+    totals: dict[str, tuple[float, float]],
+    adj_rows: list,
+    lookup: dict | None = None,
+) -> dict[str, tuple[float, float]]:
+    """Fold adjustment journal entries (dr/cr) into CY totals by mapping_code."""
+    if lookup is None:
+        from .master_db import get_lookup_map
+        lookup = get_lookup_map()
+    result: dict[str, list[float]] = {k: list(v) for k, v in totals.items()}
+    for adj in adj_rows:
+        code = adj["mapping_code"] if adj["mapping_code"] else ""
+        if not code:
+            continue
+        dr  = float(adj["dr_amount"] or 0)
+        cr  = float(adj["cr_amount"] or 0)
+        entry = lookup.get(code)
+        net = (dr - cr) if (not entry or entry.sign == "DR_POSITIVE") else (cr - dr)
+        if code not in result:
+            result[code] = [0.0, 0.0]
+        result[code][0] += net
+    return {k: (v[0], v[1]) for k, v in result.items()}
+
+
 def validate_balance(
     totals: dict[str, tuple[float, float]],
     entity_type: str,

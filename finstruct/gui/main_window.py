@@ -17,6 +17,7 @@ STEPS = [
     ("3", "Map Ledgers"),
     ("4", "Review WTB"),
     ("5", "PPE Register"),
+    ("5b","Annexures"),
     ("6", "Generate FS"),
     ("7", "Notes"),
     ("8", "Reports"),
@@ -175,6 +176,7 @@ class MainWindow:
             self._show_mapping,
             self._show_wtb,
             self._show_ppe,
+            self._show_annexures,
             self._show_fs,
             self._go_notes,
             self._show_reports,
@@ -314,11 +316,19 @@ class MainWindow:
                     on_dep_posted=lambda _: self._status_var.set("Depreciation posted."))
         f.pack(fill="both", expand=True)
 
-    def _show_fs(self):
+    def _show_annexures(self):
         self._clear_content()
         self._highlight_step(5)
+        from .annexures_view import AnnexuresView
+        f = AnnexuresView(self._content, self._db, self._sdb)
+        f.pack(fill="both", expand=True)
+        self._status_var.set("Custom Annexures — fill buckets, tie out to TB.")
+
+    def _show_fs(self):
+        self._clear_content()
+        self._highlight_step(6)
         try:
-            doc, engine = self._build_fs_doc()
+            doc, engine, _ = self._build_fs_doc()
         except Exception as e:
             messagebox.showerror("FS Error", str(e)); return
 
@@ -347,55 +357,83 @@ class MainWindow:
 
     def _build_fs_doc(self):
         from ..core.fs_engine import FSEngine
-        from ..core.wtb_engine import aggregate_by_code, build_wtb_lines
-        from ..core.ppe_engine import recalc_asset
+        from ..core.wtb_engine import aggregate_by_code, build_wtb_lines, apply_adjustments
+        from ..core.master_db import get_lookup_map
         wtb_rows = self._db.get_wtb()
         raw_rows = self._db.get_raw_tb()
         lines    = build_wtb_lines(wtb_rows, raw_rows)
         totals   = aggregate_by_code(lines)
-        em       = self._db.get_all_entity()
-        fy       = self._db.get_meta("financial_year") or ""
-        et       = self._db.get_meta("entity_type") or "COMPANY"
-        div      = int(self._db.get_meta("rounding_divisor") or "1")
-        engine   = FSEngine(et, totals, em, fy, div)
-        return engine.generate(), engine
+        adj_rows = self._db.get_adjustments()
+        if adj_rows:
+            totals = apply_adjustments(totals, adj_rows, get_lookup_map())
+        em     = self._db.get_all_entity()
+        fy     = self._db.get_meta("financial_year") or ""
+        et     = self._db.get_meta("entity_type") or "COMPANY"
+        div    = int(self._db.get_meta("rounding_divisor") or "1")
+        engine = FSEngine(et, totals, em, fy, div)
+        return engine.generate(), engine, totals
 
     def _go_notes(self):
         self._clear_content()
-        self._highlight_step(6)
+        self._highlight_step(7)
         from .notes_view import NotesView
-        from ..core.wtb_engine import aggregate_by_code, build_wtb_lines
+        from ..core.ppe_engine import recalc_asset
         try:
-            doc, _ = self._build_fs_doc()
+            doc, _, totals = self._build_fs_doc()
         except Exception as e:
             messagebox.showerror("Error", str(e)); return
-        wtb_rows = self._db.get_wtb()
-        raw_rows = self._db.get_raw_tb()
-        lines    = build_wtb_lines(wtb_rows, raw_rows)
-        totals   = aggregate_by_code(lines)
         ppe_data = [dict(r) for r in self._db.get_ppe()]
         for a in ppe_data:
             a.update(recalc_asset(a))
         et  = self._db.get_meta("entity_type") or "COMPANY"
         div = int(self._db.get_meta("rounding_divisor") or "1")
+        em  = self._db.get_all_entity()
         from ..core.notes_engine import NotesEngine
-        ne    = NotesEngine(totals, et, ppe_data, div)
-        notes = ne.generate_all()
+        ne    = NotesEngine(totals, et, ppe_data, div, em)
+        notes, _ = ne.generate_dynamic(doc)
         f = NotesView(self._content, notes, self._db)
         f.pack(fill="both", expand=True)
-        self._status_var.set("Notes generated.")
+        self._status_var.set(f"Notes generated ({len(notes)} notes, auto-numbered).")
 
     def _show_reports(self):
         self._clear_content()
-        self._highlight_step(7)
+        self._highlight_step(8)
+        et = (self._db.get_meta("entity_type") or "COMPANY").upper()
+
+        # Determine which report tabs to show
+        show_directors = (et in ("COMPANY", "SEC8"))
+        show_audit = False
+        if et in ("COMPANY", "SEC8"):
+            show_audit = True
+        elif et == "LLP":
+            try:
+                em = self._db.get_all_entity()
+                turnover = float(em.get("turnover") or 0)
+                if turnover > 4_000_000:
+                    show_audit = True
+            except (ValueError, TypeError):
+                pass
+
+        if not (show_directors or show_audit):
+            from tkinter import messagebox
+            ttk.Label(self._content,
+                      text=f"Reports not applicable for entity type: {et}",
+                      style="Muted.TLabel").pack(padx=12, pady=24)
+            self._report_texts = {}
+            return
+
         nb = ttk.Notebook(self._content)
         nb.pack(fill="both", expand=True)
         from .report_editor import ReportEditor
-        dr = ReportEditor(nb, self._db, "directors")
-        ar = ReportEditor(nb, self._db, "audit")
-        nb.add(dr, text="Directors' Report")
-        nb.add(ar, text="Audit Report")
-        self._report_texts = {"directors_editor": dr, "audit_editor": ar}
+        self._report_texts = {}
+        if show_directors:
+            dr = ReportEditor(nb, self._db, "directors")
+            nb.add(dr, text="Directors' Report")
+            self._report_texts["directors_editor"] = dr
+        if show_audit:
+            ar = ReportEditor(nb, self._db, "audit")
+            nb.add(ar, text="Independent Auditor's Report")
+            self._report_texts["audit_editor"] = ar
 
     def _validate(self):
         if not self._db:
@@ -461,10 +499,9 @@ class MainWindow:
         root.bind("<F9>",         lambda e: self._validate())
         root.bind("<F10>",        lambda e: self._go_notes())
         root.bind("<F12>",        lambda e: self._export())
-        root.bind("<Alt-b>",      lambda e: self._go_step(5))
-        root.bind("<Alt-p>",      lambda e: self._go_step(5))
-        root.bind("<Alt-n>",      lambda e: self._go_step(6))
-        root.bind("<Alt-m>",      lambda e: self._go_step(2))
-        root.bind("<Alt-w>",      lambda e: self._go_step(3))
+        root.bind("<Alt-b>",      lambda e: self._go_step(6))   # Generate FS
+        root.bind("<Alt-n>",      lambda e: self._go_step(7))   # Notes
+        root.bind("<Alt-m>",      lambda e: self._go_step(2))   # Mapping
+        root.bind("<Alt-w>",      lambda e: self._go_step(3))   # WTB review
         root.bind("<Alt-e>",      lambda e: self._export())
-        root.bind("<Alt-a>",      lambda e: self._go_step(4))
+        root.bind("<Alt-a>",      lambda e: self._go_step(5))   # Annexures
