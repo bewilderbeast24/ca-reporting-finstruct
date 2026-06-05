@@ -13,7 +13,7 @@ from .encryption import encrypt, decrypt
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 PII_KEYS = {
     "pan", "cin", "llpin", "address", "reg_addr", "pan_no",
@@ -69,7 +69,7 @@ class ProjectDB:
         );
         CREATE TABLE IF NOT EXISTS wtb (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            raw_tb_id INTEGER REFERENCES raw_tb(id) ON DELETE CASCADE,
+            raw_tb_id INTEGER UNIQUE REFERENCES raw_tb(id) ON DELETE CASCADE,
             mapping_code TEXT,
             confidence REAL DEFAULT 0,
             confidence_source TEXT DEFAULT 'MANUAL',
@@ -135,7 +135,39 @@ class ProjectDB:
         if not self.get_meta("schema_version"):
             self.set_meta("schema_version", str(SCHEMA_VERSION))
             self.set_meta("created_at", datetime.now().isoformat())
+        ver = int(self.get_meta("schema_version") or "1")
+        if ver < 2:
+            self._migrate_v2()
         self.migrate_legacy_directors()
+
+    def _migrate_v2(self):
+        """Add UNIQUE(raw_tb_id) to wtb by recreating the table."""
+        try:
+            self._conn.executescript("""
+            CREATE TABLE IF NOT EXISTS wtb_v2 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                raw_tb_id INTEGER UNIQUE REFERENCES raw_tb(id) ON DELETE CASCADE,
+                mapping_code TEXT,
+                confidence REAL DEFAULT 0,
+                confidence_source TEXT DEFAULT 'MANUAL',
+                cy_net REAL DEFAULT 0,
+                py_net REAL DEFAULT 0,
+                is_confirmed INTEGER DEFAULT 0
+            );
+            INSERT OR IGNORE INTO wtb_v2(
+                raw_tb_id, mapping_code, confidence,
+                confidence_source, cy_net, py_net, is_confirmed)
+            SELECT raw_tb_id, mapping_code, confidence,
+                confidence_source, cy_net, py_net, is_confirmed
+            FROM wtb;
+            DROP TABLE wtb;
+            ALTER TABLE wtb_v2 RENAME TO wtb;
+            """)
+            self._conn.commit()
+            self.set_meta("schema_version", "2")
+            log.info("DB migrated to v2: wtb.raw_tb_id is now UNIQUE")
+        except Exception as e:
+            log.error("Migration v2 failed: %s", e)
 
     # ── Meta ─────────────────────────────────────────────────────────────
     def get_meta(self, key: str) -> str | None:
@@ -248,8 +280,14 @@ class ProjectDB:
                    source: str, cy_net: float, py_net: float, confirmed: int = 0):
         with self._tx():
             self._conn.execute(
-                "INSERT OR REPLACE INTO wtb(raw_tb_id,mapping_code,confidence,"
-                "confidence_source,cy_net,py_net,is_confirmed) VALUES(?,?,?,?,?,?,?)",
+                "INSERT INTO wtb(raw_tb_id,mapping_code,confidence,confidence_source,"
+                "cy_net,py_net,is_confirmed) VALUES(?,?,?,?,?,?,?) "
+                "ON CONFLICT(raw_tb_id) DO UPDATE SET "
+                "mapping_code=excluded.mapping_code,"
+                "confidence=excluded.confidence,"
+                "confidence_source=excluded.confidence_source,"
+                "cy_net=excluded.cy_net,py_net=excluded.py_net,"
+                "is_confirmed=excluded.is_confirmed",
                 (raw_tb_id, mapping_code, confidence, source, cy_net, py_net, confirmed)
             )
 

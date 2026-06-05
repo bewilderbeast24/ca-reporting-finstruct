@@ -98,14 +98,14 @@ class FSEngine:
         if self._etype in ("COMPANY", "SEC8"):
             doc.bs = self._company_bs()
             if self._etype == "SEC8":
-                doc.ie = self._aop_ie()
+                doc.ie = self._sec8_ie()
             else:
                 doc.pl = self._company_pl()
             if include_cf:
                 doc.cf = self._company_cf()
         elif self._etype == "LLP":
             doc.bs = self._llp_bs()
-            doc.pl = self._nce_pl(["LL"])
+            doc.pl = self._llp_pl()
         elif self._etype == "PROP":
             doc.bs = self._nce_bs()
             doc.pl = self._nce_pl(["NC", "NP"])
@@ -595,6 +595,78 @@ class FSEngine:
         lines.append(_grand("TOTAL PAYMENTS", tot_pay, 0))
         return lines
 
+    # ─── SEC8 INCOME & EXPENDITURE (reads PL codes, I&E presentation) ────────
+
+    def _sec8_ie(self) -> list[FSLine]:
+        lines = [_hdr("INCOME AND EXPENDITURE ACCOUNT"), _blank()]
+        lines.append(_sec("INCOME"))
+        rev_cy = self._sum_cy(["PL001","PL002","PL003"]) - self._cy("PL004")
+        rev_py = self._sum_py(["PL001","PL002","PL003"]) - self._py("PL004")
+        lines.append(_line("I.   Income from Activities", rev_cy, rev_py, note=21, indent=1))
+        oi_cy  = self._sum_cy(["PL005","PL006","PL007","PL008","PL009"])
+        oi_py  = self._sum_py(["PL005","PL006","PL007","PL008","PL009"])
+        lines.append(_line("II.  Other Income", oi_cy, oi_py, note=22, indent=1))
+        tot_i_cy = rev_cy + oi_cy; tot_i_py = rev_py + oi_py
+        lines.append(_grand("TOTAL INCOME (I)", tot_i_cy, tot_i_py))
+        lines.append(_blank())
+        lines.append(_sec("EXPENDITURE"))
+        emp_cy = self._sum_cy(["PL017","PL018","PL019","PL020","PL021"])
+        emp_py = self._sum_py(["PL017","PL018","PL019","PL020","PL021"])
+        lines.append(_line("III. Programme / Staff Expenses", emp_cy, emp_py, note=26, indent=1))
+        fin_cy = self._sum_cy(["PL022","PL023","PL024"])
+        fin_py = self._sum_py(["PL022","PL023","PL024"])
+        lines.append(_line("IV.  Finance Costs", fin_cy, fin_py, note=27, indent=1))
+        dep_cy = self._cy("PL025") + self._cy("PL026")
+        dep_py = self._py("PL025") + self._py("PL026")
+        lines.append(_line("V.   Depreciation & Amortisation", dep_cy, dep_py, note=28, indent=1))
+        oe_cy  = self._sum_cy([f"PL{i:03d}" for i in range(27, 40)])
+        oe_py  = self._sum_py([f"PL{i:03d}" for i in range(27, 40)])
+        lines.append(_line("VI.  Other Expenses", oe_cy, oe_py, note=29, indent=1))
+        tot_e_cy = emp_cy + fin_cy + dep_cy + oe_cy
+        tot_e_py = emp_py + fin_py + dep_py + oe_py
+        lines.append(_grand("TOTAL EXPENDITURE (II)", tot_e_cy, tot_e_py))
+        lines.append(_blank())
+        sur_cy = tot_i_cy - tot_e_cy; sur_py = tot_i_py - tot_e_py
+        lbl = "SURPLUS FOR THE YEAR (I–II)" if sur_cy >= 0 else "DEFICIT FOR THE YEAR (II–I)"
+        lines.append(_grand(lbl, abs(sur_cy), abs(sur_py)))
+        return lines
+
+    # ─── LLP PROFIT & LOSS (LL018–LL027 codes) ────────────────────────────────
+
+    def _llp_pl(self) -> list[FSLine]:
+        lines = [_hdr("PROFIT AND LOSS ACCOUNT"), _blank()]
+        rev_cy = self._cy("LL018"); rev_py = self._py("LL018")
+        lines.append(_line("I.   Revenue from Operations", rev_cy, rev_py, note=14, indent=1))
+        oi_cy  = self._cy("LL019"); oi_py  = self._py("LL019")
+        lines.append(_line("II.  Other Income", oi_cy, oi_py, note=15, indent=1))
+        tot_i_cy = rev_cy + oi_cy; tot_i_py = rev_py + oi_py
+        lines.append(_tot("III. Total Income", tot_i_cy, tot_i_py))
+        lines.append(_blank())
+        lines.append(_sec("IV.  Expenses:"))
+        cog_cy = self._cy("LL020") + self._cy("LL021")
+        cog_py = self._py("LL020") + self._py("LL021")
+        lines.append(_line("     Cost of Goods / Materials", cog_cy, cog_py, note=16, indent=2))
+        emp_cy = self._cy("LL022"); emp_py = self._py("LL022")
+        lines.append(_line("     Employee Expenses", emp_cy, emp_py, note=17, indent=2))
+        rem_cy = self._cy("LL023"); rem_py = self._py("LL023")
+        lines.append(_line("     Partners' Remuneration", rem_cy, rem_py, note=18, indent=2))
+        fin_cy = self._cy("LL024"); fin_py = self._py("LL024")
+        lines.append(_line("     Finance Costs", fin_cy, fin_py, note=19, indent=2))
+        dep_cy = self._cy("LL025"); dep_py = self._py("LL025")
+        lines.append(_line("     Depreciation & Amortisation", dep_cy, dep_py, note=20, indent=2))
+        oe_cy  = self._cy("LL026"); oe_py  = self._py("LL026")
+        lines.append(_line("     Administrative & Other Expenses", oe_cy, oe_py, note=21, indent=2))
+        tax_cy = self._cy("LL027"); tax_py = self._py("LL027")
+        lines.append(_line("     Provision for Tax", tax_cy, tax_py, indent=2))
+        tot_e_cy = cog_cy + emp_cy + rem_cy + fin_cy + dep_cy + oe_cy + tax_cy
+        tot_e_py = cog_py + emp_py + rem_py + fin_py + dep_py + oe_py + tax_py
+        lines.append(_tot("     Total Expenses", tot_e_cy, tot_e_py))
+        lines.append(_blank())
+        net_cy = tot_i_cy - tot_e_cy; net_py = tot_i_py - tot_e_py
+        lbl = "V.   Net Profit for the year" if net_cy >= 0 else "V.   Net Loss for the year"
+        lines.append(_grand(lbl, net_cy, net_py))
+        return lines
+
     # ─── CASH FLOW STATEMENT (Indirect Method — COMPANY / SEC8) ──────────────
 
     def _company_cf(self) -> list[FSLine]:
@@ -630,8 +702,8 @@ class FSEngine:
         pbt_cy = tot_rev_cy - tot_exp_cy
         pbt_py = tot_rev_py - tot_exp_py
 
-        # Interest income (PL007) removed from operating, added to investing
-        int_inc_cy = self._cy("PL007"); int_inc_py = self._py("PL007")
+        # PL005 = Interest Income; reclassify from operating to investing
+        int_inc_cy = self._cy("PL005"); int_inc_py = self._py("PL005")
 
         # ── A. OPERATING ACTIVITIES ──────────────────────────────────────────
         lines.append(_sec("A.  CASH FLOW FROM OPERATING ACTIVITIES"))
@@ -742,8 +814,7 @@ class FSEngine:
         net_cf_py = round(cf_op_py + cf_inv_py + cf_fin_py, 2)
         lines.append(_grand("Net Increase/(Decrease) in Cash (A+B+C)", net_cf_cy, net_cf_py))
 
-        cash_op_cy = self._sum_cy(["AS023","AS024","AS025","AS026"])  # closing from PY
-        cash_cl_cy = self._cy("AS023") + self._cy("AS024") + self._cy("AS025") + self._cy("AS026")
+        cash_cl_cy  = self._sum_cy(["AS023","AS024","AS025","AS026"])
         cash_op_val = self._sum_py(["AS023","AS024","AS025","AS026"])
         lines.append(_line("Add: Opening Cash & Cash Equivalents", cash_op_val, 0, indent=1))
         lines.append(_grand("Closing Cash & Cash Equivalents", cash_cl_cy, 0))

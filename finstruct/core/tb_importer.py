@@ -27,6 +27,13 @@ def _detect_col(headers: list[str], candidates: set[str]) -> int | None:
     return None
 
 
+def _strip_dr_cr_text(s: str) -> str:
+    """Remove Dr./Cr. suffix tokens used by Tally in closing balance text."""
+    for tag in ("Dr.", "Cr.", "DR.", "CR.", "Dr", "dr", "CR", "Cr", "cr"):
+        s = s.replace(tag, "")
+    return s
+
+
 def _to_float(v) -> float:
     try:
         s = str(v or "").strip()
@@ -165,7 +172,7 @@ def import_xlsx(path: Path) -> ImportResult:
             result.errors.append("Empty sheet")
             return result
         headers = [str(c or "") for c in all_rows[0]]
-        _parse_rows(headers, all_rows[1:], result)
+        _parse_rows(headers, all_rows[1:], result, source="XLSX")
         wb.close()
     except Exception as e:
         result.errors.append(f"XLSX read error: {e}")
@@ -184,7 +191,7 @@ def import_csv(path: Path) -> ImportResult:
             result.errors.append("Empty CSV")
             return result
         headers = rows[0]
-        _parse_rows(headers, rows[1:], result)
+        _parse_rows(headers, rows[1:], result, source="CSV")
     except Exception as e:
         result.errors.append(f"CSV read error: {e}")
     return result
@@ -243,14 +250,13 @@ def import_tally_xml(path: Path) -> ImportResult:
             cl_bal_txt = ledger.findtext("CLOSINGBALANCE") or "0"
             norm_bal = cl_bal_txt.lower().replace(".", "").strip()
             is_dr = "dr" in norm_bal
-            net = _to_float(cl_bal_txt.replace("Dr.", "").replace("Cr.", "").replace("Dr", "").replace("CR", "").replace("Cr", ""))
+            net = _to_float(_strip_dr_cr_text(cl_bal_txt))
             if not is_dr:
                 net = -net
-            # Parse prior-year opening balance (Tally exports OPENINGBALANCE element)
             op_bal_txt = ledger.findtext("OPENINGBALANCE") or "0"
-            op_norm = op_bal_txt.lower().replace(".", "").strip()
-            op_is_dr = "dr" in op_norm
-            py_net = _to_float(op_bal_txt.replace("Dr.", "").replace("Cr.", "").replace("Dr", "").replace("CR", "").replace("Cr", ""))
+            op_norm    = op_bal_txt.lower().replace(".", "").strip()
+            op_is_dr   = "dr" in op_norm
+            py_net     = _to_float(_strip_dr_cr_text(op_bal_txt))
             if not op_is_dr:
                 py_net = -py_net
             if name:
@@ -268,7 +274,7 @@ def import_tally_xml(path: Path) -> ImportResult:
     return result
 
 
-def _parse_rows(headers: list[str], data_rows, result: ImportResult):
+def _parse_rows(headers: list[str], data_rows, result: ImportResult, source: str = "XLSX"):
     lcol = _detect_col(headers, COMMON_LEDGER_HEADERS)
     gcol = _detect_col(headers, COMMON_GROUP_HEADERS)
     dcol = _detect_col(headers, COMMON_DR_HEADERS)
@@ -307,7 +313,7 @@ def _parse_rows(headers: list[str], data_rows, result: ImportResult):
             "cy_credit":   cr,
             "cy_net":      net,
             "py_net":      py,
-            "source":      "XLSX",
+            "source":      source,
         })
 
     # Warn on duplicate ledger names

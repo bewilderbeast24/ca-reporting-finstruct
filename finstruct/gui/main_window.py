@@ -318,7 +318,7 @@ class MainWindow:
         self._clear_content()
         self._highlight_step(5)
         try:
-            doc, engine = self._build_fs_doc()
+            doc, engine, _ = self._build_fs_doc()
         except Exception as e:
             messagebox.showerror("FS Error", str(e)); return
 
@@ -347,39 +347,39 @@ class MainWindow:
 
     def _build_fs_doc(self):
         from ..core.fs_engine import FSEngine
-        from ..core.wtb_engine import aggregate_by_code, build_wtb_lines
-        from ..core.ppe_engine import recalc_asset
+        from ..core.wtb_engine import aggregate_by_code, build_wtb_lines, apply_adjustments
+        from ..core.master_db import get_lookup_map
         wtb_rows = self._db.get_wtb()
         raw_rows = self._db.get_raw_tb()
         lines    = build_wtb_lines(wtb_rows, raw_rows)
         totals   = aggregate_by_code(lines)
-        em       = self._db.get_all_entity()
-        fy       = self._db.get_meta("financial_year") or ""
-        et       = self._db.get_meta("entity_type") or "COMPANY"
-        div      = int(self._db.get_meta("rounding_divisor") or "1")
-        engine   = FSEngine(et, totals, em, fy, div)
-        return engine.generate(), engine
+        adj_rows = self._db.get_adjustments()
+        if adj_rows:
+            totals = apply_adjustments(totals, adj_rows, get_lookup_map())
+        em     = self._db.get_all_entity()
+        fy     = self._db.get_meta("financial_year") or ""
+        et     = self._db.get_meta("entity_type") or "COMPANY"
+        div    = int(self._db.get_meta("rounding_divisor") or "1")
+        engine = FSEngine(et, totals, em, fy, div)
+        return engine.generate(), engine, totals
 
     def _go_notes(self):
         self._clear_content()
         self._highlight_step(6)
         from .notes_view import NotesView
-        from ..core.wtb_engine import aggregate_by_code, build_wtb_lines
+        from ..core.ppe_engine import recalc_asset
         try:
-            doc, _ = self._build_fs_doc()
+            _, _, totals = self._build_fs_doc()
         except Exception as e:
             messagebox.showerror("Error", str(e)); return
-        wtb_rows = self._db.get_wtb()
-        raw_rows = self._db.get_raw_tb()
-        lines    = build_wtb_lines(wtb_rows, raw_rows)
-        totals   = aggregate_by_code(lines)
         ppe_data = [dict(r) for r in self._db.get_ppe()]
         for a in ppe_data:
             a.update(recalc_asset(a))
         et  = self._db.get_meta("entity_type") or "COMPANY"
         div = int(self._db.get_meta("rounding_divisor") or "1")
+        em  = self._db.get_all_entity()
         from ..core.notes_engine import NotesEngine
-        ne    = NotesEngine(totals, et, ppe_data, div)
+        ne    = NotesEngine(totals, et, ppe_data, div, em)
         notes = ne.generate_all()
         f = NotesView(self._content, notes, self._db)
         f.pack(fill="both", expand=True)
@@ -462,7 +462,6 @@ class MainWindow:
         root.bind("<F10>",        lambda e: self._go_notes())
         root.bind("<F12>",        lambda e: self._export())
         root.bind("<Alt-b>",      lambda e: self._go_step(5))
-        root.bind("<Alt-p>",      lambda e: self._go_step(5))
         root.bind("<Alt-n>",      lambda e: self._go_step(6))
         root.bind("<Alt-m>",      lambda e: self._go_step(2))
         root.bind("<Alt-w>",      lambda e: self._go_step(3))
