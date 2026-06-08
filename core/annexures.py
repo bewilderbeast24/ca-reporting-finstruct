@@ -15,8 +15,8 @@ ANNEXURE_DEFS: dict[str, dict] = {
     "TR_AGEING": {
         "title":      "Trade Receivables Ageing Schedule (Sch III amendment)",
         "note_no":    17,
-        "source_codes": ["AS020", "AS021"],
-        "less_codes": ["AS022"],
+        "source_codes": ["CO_AS020", "CO_AS021"],
+        "less_codes": ["CO_AS022"],
         "rows": [
             "Undisputed – Considered Good – Less than 6 months",
             "Undisputed – Considered Good – 6 months to 1 year",
@@ -31,7 +31,7 @@ ANNEXURE_DEFS: dict[str, dict] = {
     "TP_AGEING": {
         "title":      "Trade Payables Ageing Schedule (MSME + Others)",
         "note_no":    9,
-        "source_codes": ["EL025", "EL026"],
+        "source_codes": ["CO_EL025", "CO_EL026"],
         "less_codes": [],
         "rows": [
             "MSME – Less than 1 year",
@@ -49,7 +49,7 @@ ANNEXURE_DEFS: dict[str, dict] = {
     "SHARE_CAPITAL": {
         "title":      "Share Capital Working — Movement & Top Shareholders",
         "note_no":    3,
-        "source_codes": ["EL001", "EL002"],
+        "source_codes": ["CO_EL001", "CO_EL002"],
         "less_codes": [],
         "rows": [
             "Authorised — Equity Shares (Nos.)",
@@ -69,8 +69,8 @@ ANNEXURE_DEFS: dict[str, dict] = {
     "BORROWINGS": {
         "title":      "Borrowings Disclosure — Security, Terms, Rate",
         "note_no":    5,
-        "source_codes": ["EL010", "EL011", "EL012", "EL013", "EL014", "EL015",
-                         "EL020", "EL021", "EL022", "EL023", "EL024"],
+        "source_codes": ["CO_EL010", "CO_EL011", "CO_EL012", "CO_EL013", "CO_EL014", "CO_EL015",
+                         "CO_EL020", "CO_EL021", "CO_EL022", "CO_EL023", "CO_EL024"],
         "less_codes": [],
         "rows": [
             "Long-Term — Term Loans from Banks (Secured)",

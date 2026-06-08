@@ -153,8 +153,8 @@ class NotesEngine:
 
         # Note 3: Share Capital
         n3 = Note(3, "Share Capital")
-        eq_cy = self._cy("EL001"); eq_py = self._py("EL001")
-        pref_cy = self._cy("EL002"); pref_py = self._py("EL002")
+        eq_cy = self._cy("CO_EL001"); eq_py = self._py("CO_EL001")
+        pref_cy = self._cy("CO_EL002"); pref_py = self._py("CO_EL002")
         n3.lines = [
             _hl("Authorised:"),
             _dl("[X] Equity Shares of ₹10/- each", 0, 0),
@@ -172,11 +172,11 @@ class NotesEngine:
 
         # Note 4: Reserves & Surplus
         n4 = Note(4, "Reserves and Surplus")
-        cr_cy = self._cy("EL003"); cr_py = self._py("EL003")
-        crr_cy= self._cy("EL004"); crr_py= self._py("EL004")
-        spr_cy= self._cy("EL005"); spr_py= self._py("EL005")
-        gr_cy = self._cy("EL006"); gr_py = self._py("EL006")
-        re_cy = self._cy("EL007"); re_py = self._py("EL007")
+        cr_cy = self._cy("CO_EL003"); cr_py = self._py("CO_EL003")
+        crr_cy= self._cy("CO_EL004"); crr_py= self._py("CO_EL004")
+        spr_cy= self._cy("CO_EL005"); spr_py= self._py("CO_EL005")
+        gr_cy = self._cy("CO_EL006"); gr_py = self._py("CO_EL006")
+        re_cy = self._cy("CO_EL007"); re_py = self._py("CO_EL007")
         tot_cy= cr_cy+crr_cy+spr_cy+gr_cy+re_cy
         tot_py= cr_py+crr_py+spr_py+gr_py+re_py
         n4.lines = [
@@ -191,14 +191,14 @@ class NotesEngine:
 
         # Note 5: Long-Term Borrowings
         n5 = Note(5, "Long-Term Borrowings")
-        ltb_codes = ["EL010","EL011","EL012","EL013","EL014","EL015"]
+        ltb_codes = ["CO_EL010","CO_EL011","CO_EL012","CO_EL013","CO_EL014","CO_EL015"]
         n5.lines = [
-            _dl("Term Loans from Banks (Secured)", self._cy("EL010"), self._py("EL010")),
-            _dl("Term Loans from Financial Institutions", self._cy("EL011"), self._py("EL011")),
-            _dl("Bonds / Debentures", self._cy("EL012"), self._py("EL012")),
-            _dl("Deposits", self._cy("EL013"), self._py("EL013")),
-            _dl("Loans from Related Parties", self._cy("EL014"), self._py("EL014")),
-            _dl("Other Long-term Borrowings", self._cy("EL015"), self._py("EL015")),
+            _dl("Term Loans from Banks (Secured)", self._cy("CO_EL010"), self._py("CO_EL010")),
+            _dl("Term Loans from Financial Institutions", self._cy("CO_EL011"), self._py("CO_EL011")),
+            _dl("Bonds / Debentures", self._cy("CO_EL012"), self._py("CO_EL012")),
+            _dl("Deposits", self._cy("CO_EL013"), self._py("CO_EL013")),
+            _dl("Loans from Related Parties", self._cy("CO_EL014"), self._py("CO_EL014")),
+            _dl("Other Long-term Borrowings", self._cy("CO_EL015"), self._py("CO_EL015")),
             _tl("Total", self._sum_cy(ltb_codes), self._sum_py(ltb_codes)),
         ]
         notes.append(n5)
@@ -206,31 +206,31 @@ class NotesEngine:
         # Note 6: Other Long-term Liabilities
         n6 = Note(6, "Other Long-term Liabilities")
         n6.lines = [
-            _dl("Advance from Customers (long-term)", self._cy("EL017"), self._py("EL017")),
-            _tl("Total", self._cy("EL017"), self._py("EL017")),
+            _dl("Advance from Customers (long-term)", self._cy("CO_EL017"), self._py("CO_EL017")),
+            _tl("Total", self._cy("CO_EL017"), self._py("CO_EL017")),
         ]
         notes.append(n6)
 
         # Note 7: Long-term Provisions
         n7 = Note(7, "Long-term Provisions")
-        ltp_cy = self._cy("EL018") + self._cy("EL019")
-        ltp_py = self._py("EL018") + self._py("EL019")
+        ltp_cy = self._cy("CO_EL018") + self._cy("CO_EL019")
+        ltp_py = self._py("CO_EL018") + self._py("CO_EL019")
         n7.lines = [
-            _dl("Provision for Employee Benefits (Gratuity / Leave)", self._cy("EL018"), self._py("EL018")),
-            _dl("Other Long-term Provisions", self._cy("EL019"), self._py("EL019")),
+            _dl("Provision for Employee Benefits (Gratuity / Leave)", self._cy("CO_EL018"), self._py("CO_EL018")),
+            _dl("Other Long-term Provisions", self._cy("CO_EL019"), self._py("CO_EL019")),
             _tl("Total", ltp_cy, ltp_py),
         ]
         notes.append(n7)
 
         # Note 8: Short-Term Borrowings
         n8 = Note(8, "Short-Term Borrowings")
-        stb_codes = ["EL020","EL021","EL022","EL023","EL024"]
+        stb_codes = ["CO_EL020","CO_EL021","CO_EL022","CO_EL023","CO_EL024"]
         n8.lines = [
-            _dl("Cash Credit / Overdraft from Banks", self._cy("EL020"), self._py("EL020")),
-            _dl("Short-term Loans from Banks", self._cy("EL021"), self._py("EL021")),
-            _dl("Current Maturities of Long-term Debt", self._cy("EL022"), self._py("EL022")),
-            _dl("Loans from Directors / Related Parties", self._cy("EL023"), self._py("EL023")),
-            _dl("Other Short-term Borrowings", self._cy("EL024"), self._py("EL024")),
+            _dl("Cash Credit / Overdraft from Banks", self._cy("CO_EL020"), self._py("CO_EL020")),
+            _dl("Short-term Loans from Banks", self._cy("CO_EL021"), self._py("CO_EL021")),
+            _dl("Current Maturities of Long-term Debt", self._cy("CO_EL022"), self._py("CO_EL022")),
+            _dl("Loans from Directors / Related Parties", self._cy("CO_EL023"), self._py("CO_EL023")),
+            _dl("Other Short-term Borrowings", self._cy("CO_EL024"), self._py("CO_EL024")),
             _tl("Total", self._sum_cy(stb_codes), self._sum_py(stb_codes)),
         ]
         notes.append(n8)
@@ -238,9 +238,9 @@ class NotesEngine:
         # Note 9: Trade Payables
         n9 = Note(9, "Trade Payables")
         n9.lines = [
-            _dl("Trade Payables – MSME", self._cy("EL025"), self._py("EL025")),
-            _dl("Trade Payables – Others", self._cy("EL026"), self._py("EL026")),
-            _tl("Total", self._cy("EL025")+self._cy("EL026"), self._py("EL025")+self._py("EL026")),
+            _dl("Trade Payables – MSME", self._cy("CO_EL025"), self._py("CO_EL025")),
+            _dl("Trade Payables – Others", self._cy("CO_EL026"), self._py("CO_EL026")),
+            _tl("Total", self._cy("CO_EL025")+self._cy("CO_EL026"), self._py("CO_EL025")+self._py("CO_EL026")),
             _blank(),
             _line("Ageing Schedule — Trade Payables:", 0, 0, row_type="TEXT"),
             _line("(Outstanding for following periods from due date of payment)", 0, 0, row_type="TEXT"),
@@ -249,24 +249,24 @@ class NotesEngine:
 
         # Note 10: Other Current Liabilities
         n10 = Note(10, "Other Current Liabilities")
-        ocl_codes = ["EL027","EL028","EL029","EL030","EL031"]
+        ocl_codes = ["CO_EL027","CO_EL028","CO_EL029","CO_EL030","CO_EL031"]
         n10.lines = [
-            _dl("Current Maturities of Finance Lease Obligations", self._cy("EL027"), self._py("EL027")),
-            _dl("Interest Accrued but Not Due on Borrowings", self._cy("EL028"), self._py("EL028")),
-            _dl("Unpaid Dividends", self._cy("EL029"), self._py("EL029")),
-            _dl("Advance from Customers (current)", self._cy("EL030"), self._py("EL030")),
-            _dl("Other Payables (statutory dues, salary payable, etc.)", self._cy("EL031"), self._py("EL031")),
+            _dl("Current Maturities of Finance Lease Obligations", self._cy("CO_EL027"), self._py("CO_EL027")),
+            _dl("Interest Accrued but Not Due on Borrowings", self._cy("CO_EL028"), self._py("CO_EL028")),
+            _dl("Unpaid Dividends", self._cy("CO_EL029"), self._py("CO_EL029")),
+            _dl("Advance from Customers (current)", self._cy("CO_EL030"), self._py("CO_EL030")),
+            _dl("Other Payables (statutory dues, salary payable, etc.)", self._cy("CO_EL031"), self._py("CO_EL031")),
             _tl("Total", self._sum_cy(ocl_codes), self._sum_py(ocl_codes)),
         ]
         notes.append(n10)
 
         # Note 11: Short-term Provisions
         n11 = Note(11, "Short-term Provisions")
-        stp_codes = ["EL032","EL033","EL034"]
+        stp_codes = ["CO_EL032","CO_EL033","CO_EL034"]
         n11.lines = [
-            _dl("Provision for Income Tax (Net of Advance Tax)", self._cy("EL032"), self._py("EL032")),
-            _dl("Provision for Employee Benefits", self._cy("EL033"), self._py("EL033")),
-            _dl("Other Short-term Provisions", self._cy("EL034"), self._py("EL034")),
+            _dl("Provision for Income Tax (Net of Advance Tax)", self._cy("CO_EL032"), self._py("CO_EL032")),
+            _dl("Provision for Employee Benefits", self._cy("CO_EL033"), self._py("CO_EL033")),
+            _dl("Other Short-term Provisions", self._cy("CO_EL034"), self._py("CO_EL034")),
             _tl("Total", self._sum_cy(stp_codes), self._sum_py(stp_codes)),
         ]
         notes.append(n11)
@@ -281,22 +281,22 @@ class NotesEngine:
 
         # Note 13: Non-Current Investments
         n13 = Note(13, "Non-Current Investments")
-        nci_codes = ["AS006","AS007","AS008"]
+        nci_codes = ["CO_AS006","CO_AS007","CO_AS008"]
         n13.lines = [
-            _dl("Investment in Subsidiaries / Associates (at cost)", self._cy("AS006"), self._py("AS006")),
-            _dl("Investment in Equity Instruments (others)", self._cy("AS007"), self._py("AS007")),
-            _dl("Investment in Government Securities / Bonds", self._cy("AS008"), self._py("AS008")),
+            _dl("Investment in Subsidiaries / Associates (at cost)", self._cy("CO_AS006"), self._py("CO_AS006")),
+            _dl("Investment in Equity Instruments (others)", self._cy("CO_AS007"), self._py("CO_AS007")),
+            _dl("Investment in Government Securities / Bonds", self._cy("CO_AS008"), self._py("CO_AS008")),
             _tl("Total", self._sum_cy(nci_codes), self._sum_py(nci_codes)),
         ]
         notes.append(n13)
 
         # Note 14: Long-term Loans & Advances
         n14 = Note(14, "Long-term Loans and Advances")
-        ltla_codes = ["AS010","AS011","AS012"]
+        ltla_codes = ["CO_AS010","CO_AS011","CO_AS012"]
         n14.lines = [
-            _dl("Capital Advances (unsecured, considered good)", self._cy("AS010"), self._py("AS010")),
-            _dl("Security Deposits", self._cy("AS011"), self._py("AS011")),
-            _dl("Other Long-term Loans & Advances", self._cy("AS012"), self._py("AS012")),
+            _dl("Capital Advances (unsecured, considered good)", self._cy("CO_AS010"), self._py("CO_AS010")),
+            _dl("Security Deposits", self._cy("CO_AS011"), self._py("CO_AS011")),
+            _dl("Other Long-term Loans & Advances", self._cy("CO_AS012"), self._py("CO_AS012")),
             _tl("Total", self._sum_cy(ltla_codes), self._sum_py(ltla_codes)),
         ]
         notes.append(n14)
@@ -304,33 +304,33 @@ class NotesEngine:
         # Note 15: Other Non-Current Assets
         n15 = Note(15, "Other Non-Current Assets")
         n15.lines = [
-            _dl("Long-term Trade Receivables (considered good)", self._cy("AS013"), self._py("AS013")),
-            _dl("Unamortised Expenses / Miscellaneous Expenditure", self._cy("AS014"), self._py("AS014")),
-            _tl("Total", self._cy("AS013")+self._cy("AS014"), self._py("AS013")+self._py("AS014")),
+            _dl("Long-term Trade Receivables (considered good)", self._cy("CO_AS013"), self._py("CO_AS013")),
+            _dl("Unamortised Expenses / Miscellaneous Expenditure", self._cy("CO_AS014"), self._py("CO_AS014")),
+            _tl("Total", self._cy("CO_AS013")+self._cy("CO_AS014"), self._py("CO_AS013")+self._py("CO_AS014")),
         ]
         notes.append(n15)
 
         # Note 16: Inventories
         n16 = Note(16, "Inventories")
-        inv_codes = ["AS015","AS016","AS017","AS018","AS019"]
+        inv_codes = ["CO_AS015","CO_AS016","CO_AS017","CO_AS018","CO_AS019"]
         n16.lines = [
-            _dl("Raw Materials", self._cy("AS015"), self._py("AS015")),
-            _dl("Work-in-Progress", self._cy("AS016"), self._py("AS016")),
-            _dl("Finished Goods", self._cy("AS017"), self._py("AS017")),
-            _dl("Stock-in-Trade", self._cy("AS018"), self._py("AS018")),
-            _dl("Stores, Spares & Packing Material", self._cy("AS019"), self._py("AS019")),
+            _dl("Raw Materials", self._cy("CO_AS015"), self._py("CO_AS015")),
+            _dl("Work-in-Progress", self._cy("CO_AS016"), self._py("CO_AS016")),
+            _dl("Finished Goods", self._cy("CO_AS017"), self._py("CO_AS017")),
+            _dl("Stock-in-Trade", self._cy("CO_AS018"), self._py("CO_AS018")),
+            _dl("Stores, Spares & Packing Material", self._cy("CO_AS019"), self._py("CO_AS019")),
             _tl("Total", self._sum_cy(inv_codes), self._sum_py(inv_codes)),
         ]
         notes.append(n16)
 
         # Note 17: Trade Receivables
         n17 = Note(17, "Trade Receivables")
-        tr_cy = self._cy("AS020") + self._cy("AS021") - self._cy("AS022")
-        tr_py = self._py("AS020") + self._py("AS021") - self._py("AS022")
+        tr_cy = self._cy("CO_AS020") + self._cy("CO_AS021") - self._cy("CO_AS022")
+        tr_py = self._py("CO_AS020") + self._py("CO_AS021") - self._py("CO_AS022")
         n17.lines = [
-            _dl("Outstanding > 6 months", self._cy("AS020"), self._py("AS020")),
-            _dl("Outstanding ≤ 6 months", self._cy("AS021"), self._py("AS021")),
-            _dl("Less: Provision for Doubtful Debts", self._cy("AS022"), self._py("AS022")),
+            _dl("Outstanding > 6 months", self._cy("CO_AS020"), self._py("CO_AS020")),
+            _dl("Outstanding ≤ 6 months", self._cy("CO_AS021"), self._py("CO_AS021")),
+            _dl("Less: Provision for Doubtful Debts", self._cy("CO_AS022"), self._py("CO_AS022")),
             _tl("Total", tr_cy, tr_py),
             _blank(),
             _line("Ageing Schedule — Trade Receivables:", 0, 0, row_type="TEXT"),
@@ -339,25 +339,25 @@ class NotesEngine:
 
         # Note 18: Cash & Equivalents
         n18 = Note(18, "Cash and Cash Equivalents")
-        cash_cy = self._sum_cy(["AS023","AS024","AS025","AS026"])
-        cash_py = self._sum_py(["AS023","AS024","AS025","AS026"])
+        cash_cy = self._sum_cy(["CO_AS023","CO_AS024","CO_AS025","CO_AS026"])
+        cash_py = self._sum_py(["CO_AS023","CO_AS024","CO_AS025","CO_AS026"])
         n18.lines = [
-            _dl("Cash in Hand", self._cy("AS023"), self._py("AS023")),
-            _dl("Balances with Banks – Current A/c", self._cy("AS024"), self._py("AS024")),
-            _dl("Balances with Banks – Savings A/c", self._cy("AS025"), self._py("AS025")),
-            _dl("Fixed Deposits (maturity < 3 months)", self._cy("AS026"), self._py("AS026")),
+            _dl("Cash in Hand", self._cy("CO_AS023"), self._py("CO_AS023")),
+            _dl("Balances with Banks – Current A/c", self._cy("CO_AS024"), self._py("CO_AS024")),
+            _dl("Balances with Banks – Savings A/c", self._cy("CO_AS025"), self._py("CO_AS025")),
+            _dl("Fixed Deposits (maturity < 3 months)", self._cy("CO_AS026"), self._py("CO_AS026")),
             _tl("Total", cash_cy, cash_py),
         ]
         notes.append(n18)
 
         # Note 19: Short-term Loans & Advances
         n19 = Note(19, "Short-term Loans and Advances")
-        stla_codes = ["AS027","AS028","AS029","AS030"]
+        stla_codes = ["CO_AS027","CO_AS028","CO_AS029","CO_AS030"]
         n19.lines = [
-            _dl("Advance to Suppliers (considered good)", self._cy("AS027"), self._py("AS027")),
-            _dl("Advance Tax / TDS Receivable (Net)", self._cy("AS028"), self._py("AS028")),
-            _dl("Balance with Customs / Excise Authorities", self._cy("AS029"), self._py("AS029")),
-            _dl("Other Short-term Loans & Advances", self._cy("AS030"), self._py("AS030")),
+            _dl("Advance to Suppliers (considered good)", self._cy("CO_AS027"), self._py("CO_AS027")),
+            _dl("Advance Tax / TDS Receivable (Net)", self._cy("CO_AS028"), self._py("CO_AS028")),
+            _dl("Balance with Customs / Excise Authorities", self._cy("CO_AS029"), self._py("CO_AS029")),
+            _dl("Other Short-term Loans & Advances", self._cy("CO_AS030"), self._py("CO_AS030")),
             _tl("Total", self._sum_cy(stla_codes), self._sum_py(stla_codes)),
         ]
         notes.append(n19)
@@ -365,107 +365,107 @@ class NotesEngine:
         # Note 20: Other Current Assets
         n20 = Note(20, "Other Current Assets")
         n20.lines = [
-            _dl("Interest Accrued on Deposits / Investments", self._cy("AS031"), self._py("AS031")),
-            _dl("Prepaid Expenses", self._cy("AS032"), self._py("AS032")),
-            _dl("Other Current Assets", self._cy("AS033"), self._py("AS033")),
-            _tl("Total", self._cy("AS031")+self._cy("AS032")+self._cy("AS033"),
-                          self._py("AS031")+self._py("AS032")+self._py("AS033")),
+            _dl("Interest Accrued on Deposits / Investments", self._cy("CO_AS031"), self._py("CO_AS031")),
+            _dl("Prepaid Expenses", self._cy("CO_AS032"), self._py("CO_AS032")),
+            _dl("Other Current Assets", self._cy("CO_AS033"), self._py("CO_AS033")),
+            _tl("Total", self._cy("CO_AS031")+self._cy("CO_AS032")+self._cy("CO_AS033"),
+                          self._py("CO_AS031")+self._py("CO_AS032")+self._py("CO_AS033")),
         ]
         notes.append(n20)
 
         # Note 21: Revenue from Operations
         n21 = Note(21, "Revenue from Operations")
-        rev_codes = ["PL001","PL002","PL003"]
+        rev_codes = ["CO_IN001","CO_IN002","CO_IN003"]
         n21.lines = [
-            _dl("Sale of Products", self._cy("PL001"), self._py("PL001")),
-            _dl("Sale of Services", self._cy("PL002"), self._py("PL002")),
-            _dl("Other Operating Revenue", self._cy("PL003"), self._py("PL003")),
-            _dl("Less: GST / Excise Duty (if applicable)", self._cy("PL004"), self._py("PL004")),
-            _tl("Total", self._sum_cy(rev_codes) - self._cy("PL004"),
-                          self._sum_py(rev_codes) - self._py("PL004")),
+            _dl("Sale of Products", self._cy("CO_IN001"), self._py("CO_IN001")),
+            _dl("Sale of Services", self._cy("CO_IN002"), self._py("CO_IN002")),
+            _dl("Other Operating Revenue", self._cy("CO_IN003"), self._py("CO_IN003")),
+            _dl("Less: GST / Excise Duty (if applicable)", self._cy("CO_EX004"), self._py("CO_EX004")),
+            _tl("Total", self._sum_cy(rev_codes) - self._cy("CO_EX004"),
+                          self._sum_py(rev_codes) - self._py("CO_EX004")),
         ]
         notes.append(n21)
 
-        # Note 22: Other Income  (PL005=Interest, PL006=Dividend, PL007=Profit on Sale)
+        # Note 22: Other Income  (CO_IN005=Interest, CO_IN006=Dividend, CO_IN007=Profit on Sale)
         n22 = Note(22, "Other Income")
-        oi_codes = ["PL005","PL006","PL007","PL008","PL009"]
+        oi_codes = ["CO_IN005","CO_IN006","CO_IN007","CO_IN008","CO_IN009"]
         n22.lines = [
-            _dl("Interest Income", self._cy("PL005"), self._py("PL005")),
-            _dl("Dividend Income", self._cy("PL006"), self._py("PL006")),
-            _dl("Profit on Sale of Assets", self._cy("PL007"), self._py("PL007")),
-            _dl("Rental Income", self._cy("PL008"), self._py("PL008")),
-            _dl("Miscellaneous / Other Income", self._cy("PL009"), self._py("PL009")),
+            _dl("Interest Income", self._cy("CO_IN005"), self._py("CO_IN005")),
+            _dl("Dividend Income", self._cy("CO_IN006"), self._py("CO_IN006")),
+            _dl("Profit on Sale of Assets", self._cy("CO_IN007"), self._py("CO_IN007")),
+            _dl("Rental Income", self._cy("CO_IN008"), self._py("CO_IN008")),
+            _dl("Miscellaneous / Other Income", self._cy("CO_IN009"), self._py("CO_IN009")),
             _tl("Total", self._sum_cy(oi_codes), self._sum_py(oi_codes)),
         ]
         notes.append(n22)
 
         # Note 23: Cost of Materials Consumed
         n23 = Note(23, "Cost of Materials Consumed")
-        cl_cy = self._cy("AS015"); cl_py = self._py("AS015")
+        cl_cy = self._cy("CO_AS015"); cl_py = self._py("CO_AS015")
         n23.lines = [
-            _dl("Opening Stock of Raw Materials", self._cy("PL010"), self._py("PL010")),
-            _dl("Add: Purchases during the year", self._cy("PL011"), self._py("PL011")),
+            _dl("Opening Stock of Raw Materials", self._cy("CO_EX010"), self._py("CO_EX010")),
+            _dl("Add: Purchases during the year", self._cy("CO_EX011"), self._py("CO_EX011")),
             _dl("Less: Closing Stock of Raw Materials", cl_cy, cl_py),
             _tl("Cost of Materials Consumed",
-                self._cy("PL010") + self._cy("PL011") - cl_cy,
-                self._py("PL010") + self._py("PL011") - cl_py),
+                self._cy("CO_EX010") + self._cy("CO_EX011") - cl_cy,
+                self._py("CO_EX010") + self._py("CO_EX011") - cl_py),
         ]
         notes.append(n23)
 
         # Note 24: Purchases of Stock-in-Trade
         n24 = Note(24, "Purchases of Stock-in-Trade")
         n24.lines = [
-            _dl("Purchases of Stock-in-Trade", self._cy("PL012"), self._py("PL012")),
-            _tl("Total", self._cy("PL012"), self._py("PL012")),
+            _dl("Purchases of Stock-in-Trade", self._cy("CO_EX012"), self._py("CO_EX012")),
+            _tl("Total", self._cy("CO_EX012"), self._py("CO_EX012")),
         ]
         notes.append(n24)
 
         # Note 25: Changes in Inventories
         n25 = Note(25, "Changes in Inventories of Finished Goods, WIP & Stock-in-Trade")
-        ch_cy = self._sum_cy(["PL013","PL014"]) - self._sum_cy(["PL015","PL016"])
-        ch_py = self._sum_py(["PL013","PL014"]) - self._sum_py(["PL015","PL016"])
+        ch_cy = self._sum_cy(["CO_EX013","CO_EX014"]) - self._sum_cy(["CO_IN015","CO_IN016"])
+        ch_py = self._sum_py(["CO_EX013","CO_EX014"]) - self._sum_py(["CO_IN015","CO_IN016"])
         n25.lines = [
             _hl("Opening Stocks:"),
-            _dl("Finished Goods", self._cy("PL013"), self._py("PL013")),
-            _dl("Work-in-Progress", self._cy("PL014"), self._py("PL014")),
+            _dl("Finished Goods", self._cy("CO_EX013"), self._py("CO_EX013")),
+            _dl("Work-in-Progress", self._cy("CO_EX014"), self._py("CO_EX014")),
             _hl("Less: Closing Stocks:"),
-            _dl("Finished Goods", self._cy("PL015"), self._py("PL015")),
-            _dl("Work-in-Progress", self._cy("PL016"), self._py("PL016")),
+            _dl("Finished Goods", self._cy("CO_IN015"), self._py("CO_IN015")),
+            _dl("Work-in-Progress", self._cy("CO_IN016"), self._py("CO_IN016")),
             _tl("Net Change in Inventories", ch_cy, ch_py),
         ]
         notes.append(n25)
 
         # Note 26: Employee Benefit Expenses
         n26 = Note(26, "Employee Benefit Expenses")
-        emp_codes = ["PL017","PL018","PL019","PL020","PL021"]
+        emp_codes = ["CO_EX017","CO_EX018","CO_EX019","CO_EX020","CO_EX021"]
         n26.lines = [
-            _dl("Salaries & Wages", self._cy("PL017"), self._py("PL017")),
-            _dl("Bonus", self._cy("PL018"), self._py("PL018")),
-            _dl("PF / ESI Contributions", self._cy("PL019"), self._py("PL019")),
-            _dl("Gratuity", self._cy("PL020"), self._py("PL020")),
-            _dl("Staff Welfare", self._cy("PL021"), self._py("PL021")),
+            _dl("Salaries & Wages", self._cy("CO_EX017"), self._py("CO_EX017")),
+            _dl("Bonus", self._cy("CO_EX018"), self._py("CO_EX018")),
+            _dl("PF / ESI Contributions", self._cy("CO_EX019"), self._py("CO_EX019")),
+            _dl("Gratuity", self._cy("CO_EX020"), self._py("CO_EX020")),
+            _dl("Staff Welfare", self._cy("CO_EX021"), self._py("CO_EX021")),
             _tl("Total", self._sum_cy(emp_codes), self._sum_py(emp_codes)),
         ]
         notes.append(n26)
 
         # Note 27: Finance Costs
         n27 = Note(27, "Finance Costs")
-        fin_codes = ["PL022","PL023","PL024"]
+        fin_codes = ["CO_EX022","CO_EX023","CO_EX024"]
         n27.lines = [
-            _dl("Interest on Term Loans", self._cy("PL022"), self._py("PL022")),
-            _dl("Interest on Working Capital Facilities", self._cy("PL023"), self._py("PL023")),
-            _dl("Bank Charges & Other Finance Costs", self._cy("PL024"), self._py("PL024")),
+            _dl("Interest on Term Loans", self._cy("CO_EX022"), self._py("CO_EX022")),
+            _dl("Interest on Working Capital Facilities", self._cy("CO_EX023"), self._py("CO_EX023")),
+            _dl("Bank Charges & Other Finance Costs", self._cy("CO_EX024"), self._py("CO_EX024")),
             _tl("Total", self._sum_cy(fin_codes), self._sum_py(fin_codes)),
         ]
         notes.append(n27)
 
         # Note 28: Depreciation & Amortisation
         n28 = Note(28, "Depreciation and Amortisation Expense")
-        dep_cy = self._cy("PL025") + self._cy("PL026")
-        dep_py = self._py("PL025") + self._py("PL026")
+        dep_cy = self._cy("CO_EX025") + self._cy("CO_EX026")
+        dep_py = self._py("CO_EX025") + self._py("CO_EX026")
         n28.lines = [
-            _dl("Depreciation on Tangible Assets", self._cy("PL025"), self._py("PL025")),
-            _dl("Amortisation of Intangible Assets", self._cy("PL026"), self._py("PL026")),
+            _dl("Depreciation on Tangible Assets", self._cy("CO_EX025"), self._py("CO_EX025")),
+            _dl("Amortisation of Intangible Assets", self._cy("CO_EX026"), self._py("CO_EX026")),
             _tl("Total", dep_cy, dep_py),
         ]
         notes.append(n28)
@@ -548,17 +548,17 @@ class NotesEngine:
 
     def _calc_pat(self) -> float:
         """Derive PAT from P&L totals (mirrors FSEngine._company_pl logic)."""
-        rev  = self._sum_cy(["PL001","PL002","PL003"]) - self._cy("PL004")
-        oi   = self._sum_cy(["PL005","PL006","PL007","PL008","PL009"])
-        cmc  = self._cy("PL010") + self._cy("PL011")
-        pur  = self._cy("PL012")
-        inv  = self._sum_cy(["PL013","PL014"]) - self._sum_cy(["PL015","PL016"])
-        emp  = self._sum_cy(["PL017","PL018","PL019","PL020","PL021"])
-        fin  = self._sum_cy(["PL022","PL023","PL024"])
-        dep  = self._cy("PL025") + self._cy("PL026")
+        rev  = self._sum_cy(["CO_IN001","CO_IN002","CO_IN003"]) - self._cy("CO_EX004")
+        oi   = self._sum_cy(["CO_IN005","CO_IN006","CO_IN007","CO_IN008","CO_IN009"])
+        cmc  = self._cy("CO_EX010") + self._cy("CO_EX011")
+        pur  = self._cy("CO_EX012")
+        inv  = self._sum_cy(["CO_EX013","CO_EX014"]) - self._sum_cy(["CO_IN015","CO_IN016"])
+        emp  = self._sum_cy(["CO_EX017","CO_EX018","CO_EX019","CO_EX020","CO_EX021"])
+        fin  = self._sum_cy(["CO_EX022","CO_EX023","CO_EX024"])
+        dep  = self._cy("CO_EX025") + self._cy("CO_EX026")
         oe   = self._sum_cy([f"PL{i:03d}" for i in range(27, 40)])
         pbt  = rev + oi - cmc - pur - inv - emp - fin - dep - oe
-        tax  = self._cy("PL040") + self._cy("PL041")
+        tax  = self._cy("CO_EX040") + self._cy("CO_EX041")
         return round(pbt - tax, 2)
 
     def _ppe_note_lines(self) -> list[FSLine]:
@@ -607,9 +607,9 @@ class NotesEngine:
         notes = []
         n1 = Note(1, "Members' Capital / Corpus Fund")
         n1.lines = [
-            _dl("Opening Balance", self._py("AO001"), 0),
+            _dl("Opening Balance", self._py("AO_EL001"), 0),
             _dl("Add: Surplus for the year", 0, 0),
-            _tl("Closing Balance", self._cy("AO001"), self._py("AO001")),
+            _tl("Closing Balance", self._cy("AO_EL001"), self._py("AO_EL001")),
         ]
         notes.append(n1)
         return notes
@@ -617,8 +617,8 @@ class NotesEngine:
     def _trust_notes(self) -> list[Note]:
         notes = []
         n1 = Note(1, "Corpus Fund")
-        corp_cy = self._cy("TR001") + self._cy("TR002")
-        corp_py = self._py("TR001") + self._py("TR002")
+        corp_cy = self._cy("TR_EL001") + self._cy("TR_EL002")
+        corp_py = self._py("TR_EL001") + self._py("TR_EL002")
         n1.lines = [
             _dl("Opening Corpus Balance", corp_py, 0),
             _dl("Add: Corpus donations received during the year", 0, 0),
