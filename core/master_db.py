@@ -53,17 +53,17 @@ class MappingEntry:
 
 def _e(
     code: str,
-    types: Iterable[str],
-    grp: str,
-    hdg: str,
-    sub: str,
-    tag: FsTag,
+    entity_types: Iterable[str],
+    group: str,
+    heading: str,
+    sub_heading: str,
+    fs_tag: FsTag,
     sign: SignConvention = "DR_POSITIVE",
-    note: int | None = None,
-    sc_exempt: bool = False,
-    parent: str | None = None,
+    note_number: int | None = None,
+    small_co_exempt: bool = False,
+    parent_code: str | None = None,
 ) -> MappingEntry:
-    return MappingEntry(code, tuple(types), grp, hdg, sub, tag, sign, note, sc_exempt, parent)
+    return MappingEntry(code, tuple(entity_types), group, heading, sub_heading, fs_tag, sign, note_number, small_co_exempt, parent_code)
 
 
 CO  = [EntityType.COMPANY.value, EntityType.SEC8.value]
