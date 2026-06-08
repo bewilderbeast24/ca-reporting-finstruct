@@ -5,6 +5,7 @@ Produces structured FS line data; GUI and export layers render it.
 """
 
 from __future__ import annotations
+import re
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -78,6 +79,10 @@ class FSEngine:
         self._fy      = fy
         self._div     = divisor
         self._lookup  = get_lookup_map()
+        
+        # Pre-filter master entries for current entity type for faster metadata lookups
+        from core.master_db import get_master
+        self._master_entries = get_master([self._etype])
 
     def _cy(self, code: str) -> float:
         v = self._totals.get(code, (0.0, 0.0))[0]
@@ -93,18 +98,115 @@ class FSEngine:
     def _sum_py(self, codes: list[str]) -> float:
         return round(sum(self._py(c) for c in codes), 2)
 
+    def _get_meta_sum(self, group: str | None = None, heading: str | None = None, 
+                      fs_tag: str | None = None) -> tuple[float, float]:
+        """Aggregate totals by group or heading metadata."""
+        cy, py = 0.0, 0.0
+        for entry in self._master_entries:
+            if fs_tag and entry.fs_tag != fs_tag:
+                continue
+            if group and entry.group != group:
+                continue
+            if heading and entry.heading != heading:
+                continue
+            cy += self._cy(entry.code)
+            py += self._py(entry.code)
+        return round(cy, 2), round(py, 2)
+
+    def _evaluate_formula(self, formula: str) -> tuple[float, float]:
+        """
+        Evaluate basic formulas like 'GROUP:Name', 'HEADING:Name' or simple additions.
+        This is a simplified evaluator for declarative schemas.
+        """
+        if not formula:
+            return 0.0, 0.0
+        
+        # Split by + and - but keep the operators
+        # Pattern: GROUP:xxx | HEADING:xxx | code
+        parts = re.split(r'(\s*[\+\-]\s*)', formula)
+        
+        total_cy, total_py = 0.0, 0.0
+        current_op = '+'
+        
+        for part in parts:
+            part = part.strip()
+            if not part: continue
+            if part in ('+', '-'):
+                current_op = part
+                continue
+            
+            cy, py = 0.0, 0.0
+            if part.startswith("GROUP:"):
+                cy, py = self._get_meta_sum(group=part[6:])
+            elif part.startswith("HEADING:"):
+                cy, py = self._get_meta_sum(heading=part[8:])
+            elif part in self._lookup:
+                cy, py = self._cy(part), self._py(part)
+            
+            if current_op == '+':
+                total_cy += cy
+                total_py += py
+            else:
+                total_cy -= cy
+                total_py -= py
+        
+        return round(total_cy, 2), round(total_py, 2)
+
+    def _render_schema(self, schema: dict) -> list[FSLine]:
+        """Render a report based on a declarative schema dictionary."""
+        lines: list[FSLine] = []
+        for item in schema.get("layout", []):
+            itype = item.get("type")
+            label = item.get("label", "")
+            indent = item.get("indent", 0)
+            note = item.get("note")
+            
+            if itype == "HEADER":
+                lines.append(_hdr(label))
+            elif itype == "SECTION":
+                lines.append(_sec(label))
+            elif itype == "BLANK":
+                lines.append(_blank())
+            elif itype == "TEXT":
+                lines.append(_line(label, 0, 0, row_type="TEXT"))
+            else:
+                cy, py = 0.0, 0.0
+                if "formula" in item:
+                    cy, py = self._evaluate_formula(item["formula"])
+                elif "heading" in item:
+                    cy, py = self._get_meta_sum(heading=item["heading"])
+                elif "group" in item:
+                    cy, py = self._get_meta_sum(group=item["group"])
+                elif "code" in item:
+                    cy, py = self._cy(item["code"]), self._py(item["code"])
+                elif "codes" in item:
+                    cy, py = self._sum_cy(item["codes"]), self._sum_py(item["codes"])
+                
+                if itype == "TOTAL":
+                    lines.append(_tot(label, cy, py, note=note))
+                elif itype == "GRAND":
+                    lines.append(_grand(label, cy, py))
+                else:
+                    lines.append(_line(label, cy, py, note=note, indent=indent, row_type=itype))
+        return lines
+
     def generate(self, include_cf: bool = True) -> FSDocument:
+        from core.fs_layouts import (
+            COMPANY_BS_SCHEMA, LLP_BS_SCHEMA, COMPANY_PL_SCHEMA,
+            AOP_RP_SCHEMA
+        )
         doc = FSDocument(self._etype, self._fy, self._master, self._div)
+        
         if self._etype in ("COMPANY", "SEC8"):
-            doc.bs = self._company_bs()
+            doc.bs = self._render_schema(COMPANY_BS_SCHEMA)
             if self._etype == "SEC8":
                 doc.ie = self._sec8_ie()
             else:
-                doc.pl = self._company_pl()
+                doc.pl = self._render_schema(COMPANY_PL_SCHEMA)
             if include_cf:
                 doc.cf = self._company_cf()
         elif self._etype == "LLP":
-            doc.bs = self._llp_bs()
+            doc.bs = self._render_schema(LLP_BS_SCHEMA)
             doc.pl = self._llp_pl()
         elif self._etype == "PROP":
             doc.bs = self._nce_bs()
@@ -115,141 +217,38 @@ class FSEngine:
         elif self._etype == "AOP":
             doc.bs = self._aop_bs()
             doc.ie = self._aop_ie()
-            doc.rp = self._aop_rp()
+            doc.rp = self._render_schema(AOP_RP_SCHEMA)
         elif self._etype == "TRUST":
             doc.bs = self._trust_bs()
             doc.ie = self._trust_ie()
-            doc.rp = self._trust_rp()
+            doc.rp = self._render_schema(AOP_RP_SCHEMA)
+
+        self._check_balance(doc)
         return doc
 
+    def _check_balance(self, doc: FSDocument):
+        """Perform a heuristic balance check on the generated document."""
+        if not doc.bs:
+            return
+            
+        tot_l = 0.0
+        tot_a = 0.0
+        for line in doc.bs:
+            label_up = line.label.upper()
+            if "TOTAL" in label_up or line.row_type == "GRAND":
+                # Heuristic: the last GRAND/TOTAL for each side
+                if "ASSET" in label_up:
+                    tot_a = line.cy
+                elif any(kw in label_up for kw in ["LIABILIT", "EQUITY", "FUNDS"]):
+                    tot_l = line.cy
+        
+        diff = round(tot_l - tot_a, 2)
+        if abs(diff) > 0.5:
+            doc.is_balanced = False
+            doc.balance_diff_cy = diff
+            doc.bs.append(_line(f"⚠ BS imbalance: {diff:,.2f}", 0, 0, row_type="TEXT"))
+
     # ─── COMPANY BALANCE SHEET (Schedule III Part I) ──────────────────────────
-
-    def _company_bs(self) -> list[FSLine]:
-        t = self._totals
-        lines: list[FSLine] = []
-
-        # Header
-        lines += [_hdr("BALANCE SHEET")]
-
-        # ── EQUITY & LIABILITIES ──────────────────────────────────────────
-        lines.append(_sec("I.  EQUITY AND LIABILITIES"))
-
-        # Shareholders' Funds
-        lines.append(_line("1.  Shareholders' Funds", 0, 0, indent=1, row_type="SECTION"))
-        sc_cy = self._cy("CO_EL001") + self._cy("CO_EL002")
-        sc_py = self._py("CO_EL001") + self._py("CO_EL002")
-        lines.append(_line("    (a) Share Capital", sc_cy, sc_py, note=3, indent=2))
-        rs_cy = sum(self._cy(c) for c in ["CO_EL003","CO_EL004","CO_EL005","CO_EL006","CO_EL007","CO_EL008"])
-        rs_py = sum(self._py(c) for c in ["CO_EL003","CO_EL004","CO_EL005","CO_EL006","CO_EL007","CO_EL008"])
-        lines.append(_line("    (b) Reserves & Surplus", rs_cy, rs_py, note=4, indent=2))
-        sam_cy = self._cy("CO_EL009"); sam_py = self._py("CO_EL009")
-        lines.append(_line("    (c) Money received against Share Warrants", sam_cy, sam_py, indent=2))
-        tot_sf_cy = sc_cy + rs_cy + sam_cy
-        tot_sf_py = sc_py + rs_py + sam_py
-        lines.append(_tot("    Sub-total — Shareholders' Funds (A)", tot_sf_cy, tot_sf_py))
-
-        # Non-Current Liabilities
-        lines.append(_line("2.  Non-Current Liabilities", 0, 0, indent=1, row_type="SECTION"))
-        ltb_cy = self._sum_cy(["CO_EL010","CO_EL011","CO_EL012","CO_EL013","CO_EL014","CO_EL015"])
-        ltb_py = self._sum_py(["CO_EL010","CO_EL011","CO_EL012","CO_EL013","CO_EL014","CO_EL015"])
-        lines.append(_line("    (a) Long-term Borrowings", ltb_cy, ltb_py, note=5, indent=2))
-        dtl_cy = self._cy("CO_EL016"); dtl_py = self._py("CO_EL016")
-        lines.append(_line("    (b) Deferred Tax Liabilities (Net)", dtl_cy, dtl_py, indent=2))
-        otl_cy = self._cy("CO_EL017"); otl_py = self._py("CO_EL017")
-        lines.append(_line("    (c) Other Long-term Liabilities", otl_cy, otl_py, note=6, indent=2))
-        ltp_cy = self._cy("CO_EL018") + self._cy("CO_EL019")
-        ltp_py = self._py("CO_EL018") + self._py("CO_EL019")
-        lines.append(_line("    (d) Long-term Provisions", ltp_cy, ltp_py, note=7, indent=2))
-        tot_ncl_cy = ltb_cy + dtl_cy + otl_cy + ltp_cy
-        tot_ncl_py = ltb_py + dtl_py + otl_py + ltp_py
-        lines.append(_tot("    Sub-total — Non-Current Liabilities (B)", tot_ncl_cy, tot_ncl_py))
-
-        # Current Liabilities
-        lines.append(_line("3.  Current Liabilities", 0, 0, indent=1, row_type="SECTION"))
-        stb_cy = self._sum_cy(["CO_EL020","CO_EL021","CO_EL022","CO_EL023","CO_EL024"])
-        stb_py = self._sum_py(["CO_EL020","CO_EL021","CO_EL022","CO_EL023","CO_EL024"])
-        lines.append(_line("    (a) Short-term Borrowings", stb_cy, stb_py, note=8, indent=2))
-        tp_cy = self._cy("CO_EL025") + self._cy("CO_EL026")
-        tp_py = self._py("CO_EL025") + self._py("CO_EL026")
-        lines.append(_line("    (b) Trade Payables", tp_cy, tp_py, note=9, indent=2))
-        ocl_cy = self._sum_cy(["CO_EL027","CO_EL028","CO_EL029","CO_EL030","CO_EL031"])
-        ocl_py = self._sum_py(["CO_EL027","CO_EL028","CO_EL029","CO_EL030","CO_EL031"])
-        lines.append(_line("    (c) Other Current Liabilities", ocl_cy, ocl_py, note=10, indent=2))
-        stp_cy = self._sum_cy(["CO_EL032","CO_EL033","CO_EL034"])
-        stp_py = self._sum_py(["CO_EL032","CO_EL033","CO_EL034"])
-        lines.append(_line("    (d) Short-term Provisions", stp_cy, stp_py, note=11, indent=2))
-        tot_cl_cy = stb_cy + tp_cy + ocl_cy + stp_cy
-        tot_cl_py = stb_py + tp_py + ocl_py + stp_py
-        lines.append(_tot("    Sub-total — Current Liabilities (C)", tot_cl_cy, tot_cl_py))
-
-        tot_el_cy = tot_sf_cy + tot_ncl_cy + tot_cl_cy
-        tot_el_py = tot_sf_py + tot_ncl_py + tot_cl_py
-        lines.append(_grand("TOTAL — EQUITY AND LIABILITIES (A+B+C)", tot_el_cy, tot_el_py))
-
-        # ── ASSETS ────────────────────────────────────────────────────────
-        lines.append(_sec("II.  ASSETS"))
-
-        # Non-Current Assets
-        lines.append(_line("1.  Non-Current Assets", 0, 0, indent=1, row_type="SECTION"))
-        ppe_gross = self._cy("CO_AS001") + self._cy("CO_AS004")
-        ppe_dep   = self._cy("CO_AS002") + self._cy("CO_AS005")
-        ppe_cwip  = self._cy("CO_AS003")  # CWIP is not depreciated; added after net block calc
-        ppe_net   = ppe_gross - ppe_dep + ppe_cwip
-        ppe_gross_py = self._py("CO_AS001") + self._py("CO_AS004")
-        ppe_dep_py   = self._py("CO_AS002") + self._py("CO_AS005")
-        ppe_cwip_py  = self._py("CO_AS003")
-        ppe_net_py   = ppe_gross_py - ppe_dep_py + ppe_cwip_py
-        lines.append(_line("    (a) Fixed Assets (Net Block)", ppe_net, ppe_net_py, note=12, indent=2))
-        nci_cy = self._sum_cy(["CO_AS006","CO_AS007","CO_AS008"])
-        nci_py = self._sum_py(["CO_AS006","CO_AS007","CO_AS008"])
-        lines.append(_line("    (b) Non-Current Investments", nci_cy, nci_py, note=13, indent=2))
-        dta_cy = self._cy("CO_AS009"); dta_py = self._py("CO_AS009")
-        lines.append(_line("    (c) Deferred Tax Assets (Net)", dta_cy, dta_py, indent=2))
-        ltla_cy = self._sum_cy(["CO_AS010","CO_AS011","CO_AS012"])
-        ltla_py = self._sum_py(["CO_AS010","CO_AS011","CO_AS012"])
-        lines.append(_line("    (d) Long-term Loans & Advances", ltla_cy, ltla_py, note=14, indent=2))
-        onca_cy = self._cy("CO_AS013") + self._cy("CO_AS014")
-        onca_py = self._py("CO_AS013") + self._py("CO_AS014")
-        lines.append(_line("    (e) Other Non-Current Assets", onca_cy, onca_py, note=15, indent=2))
-        tot_nca_cy = ppe_net + nci_cy + dta_cy + ltla_cy + onca_cy
-        tot_nca_py = ppe_net_py + nci_py + dta_py + ltla_py + onca_py
-        lines.append(_tot("    Sub-total — Non-Current Assets (D)", tot_nca_cy, tot_nca_py))
-
-        # Current Assets
-        lines.append(_line("2.  Current Assets", 0, 0, indent=1, row_type="SECTION"))
-        inv_cy = self._sum_cy(["CO_AS015","CO_AS016","CO_AS017","CO_AS018","CO_AS019"])
-        inv_py = self._sum_py(["CO_AS015","CO_AS016","CO_AS017","CO_AS018","CO_AS019"])
-        lines.append(_line("    (a) Inventories", inv_cy, inv_py, note=16, indent=2))
-        tr_cy  = self._cy("CO_AS020") + self._cy("CO_AS021") - self._cy("CO_AS022")
-        tr_py  = self._py("CO_AS020") + self._py("CO_AS021") - self._py("CO_AS022")
-        lines.append(_line("    (b) Trade Receivables", tr_cy, tr_py, note=17, indent=2))
-        cash_cy = self._sum_cy(["CO_AS023","CO_AS024","CO_AS025","CO_AS026"])
-        cash_py = self._sum_py(["CO_AS023","CO_AS024","CO_AS025","CO_AS026"])
-        lines.append(_line("    (c) Cash and Cash Equivalents", cash_cy, cash_py, note=18, indent=2))
-        stla_cy = self._sum_cy(["CO_AS027","CO_AS028","CO_AS029","CO_AS030"])
-        stla_py = self._sum_py(["CO_AS027","CO_AS028","CO_AS029","CO_AS030"])
-        lines.append(_line("    (d) Short-term Loans & Advances", stla_cy, stla_py, note=19, indent=2))
-        oca_cy = self._cy("CO_AS031") + self._cy("CO_AS032") + self._cy("CO_AS033")
-        oca_py = self._py("CO_AS031") + self._py("CO_AS032") + self._py("CO_AS033")
-        lines.append(_line("    (e) Other Current Assets", oca_cy, oca_py, note=20, indent=2))
-        tot_ca_cy = inv_cy + tr_cy + cash_cy + stla_cy + oca_cy
-        tot_ca_py = inv_py + tr_py + cash_py + stla_py + oca_py
-        lines.append(_tot("    Sub-total — Current Assets (E)", tot_ca_cy, tot_ca_py))
-
-        tot_as_cy = tot_nca_cy + tot_ca_cy
-        tot_as_py = tot_nca_py + tot_ca_py
-        lines.append(_grand("TOTAL — ASSETS (D+E)", tot_as_cy, tot_as_py))
-
-        diff_cy = round(tot_el_cy - tot_as_cy, 2)
-        diff_py = round(tot_el_py - tot_as_py, 2)
-        if abs(diff_cy) > 0.5:
-            lines.append(_line(
-                f"⚠ BS does not balance — CY diff: {diff_cy:,.2f}  PY diff: {diff_py:,.2f}",
-                0, 0, row_type="TEXT"
-            ))
-        return lines
-
-    # ─── COMPANY P&L (Schedule III Part II) ──────────────────────────────
 
     def _company_pl(self) -> list[FSLine]:
         lines: list[FSLine] = [_hdr("STATEMENT OF PROFIT AND LOSS"), _blank()]
@@ -383,49 +382,6 @@ class FSEngine:
 
     # ─── LLP BS ───────────────────────────────────────────────────────────
 
-    def _llp_bs(self) -> list[FSLine]:
-        lines = [_hdr("BALANCE SHEET"), _blank()]
-        lines.append(_sec("FUNDS & LIABILITIES"))
-        cap_cy = self._cy("LL_EL001") + self._cy("LL_EL002")
-        cap_py = self._py("LL_EL001") + self._py("LL_EL002")
-        lines.append(_line("I.   Partners' Capital Account", cap_cy, cap_py, note=1, indent=1))
-        res_cy = self._cy("LL_EL003"); res_py = self._py("LL_EL003")
-        lines.append(_line("II.  Reserves & Surplus", res_cy, res_py, note=2, indent=1))
-        sl_cy  = self._cy("LL_EL004"); sl_py  = self._py("LL_EL004")
-        lines.append(_line("III. Secured Loans", sl_cy, sl_py, note=3, indent=1))
-        ul_cy  = self._cy("LL_EL005") + self._cy("LL_EL006")
-        ul_py  = self._py("LL_EL005") + self._py("LL_EL006")
-        lines.append(_line("IV.  Unsecured Loans", ul_cy, ul_py, note=4, indent=1))
-        tp_cy  = self._cy("LL_EL007"); tp_py  = self._py("LL_EL007")
-        ocl_cy = self._cy("LL_EL008"); ocl_py = self._py("LL_EL008")
-        prov_cy= self._cy("LL_EL009"); prov_py= self._py("LL_EL009")
-        cl_cy  = tp_cy + ocl_cy + prov_cy
-        cl_py  = tp_py + ocl_py + prov_py
-        lines.append(_line("V.   Current Liabilities & Provisions", cl_cy, cl_py, note=5, indent=1))
-        tot_fl_cy = cap_cy + res_cy + sl_cy + ul_cy + cl_cy
-        tot_fl_py = cap_py + res_py + sl_py + ul_py + cl_py
-        lines.append(_grand("TOTAL — LIABILITIES", tot_fl_cy, tot_fl_py))
-        lines.append(_blank())
-        lines.append(_sec("ASSETS"))
-        fa_cy = self._cy("LL_AS010") + self._cy("LL_AS011"); fa_py = self._py("LL_AS010") + self._py("LL_AS011")
-        lines.append(_line("I.   Fixed Assets (Net Block)", fa_cy, fa_py, note=8, indent=1))
-        inv_cy= self._cy("LL_AS012"); inv_py = self._py("LL_AS012")
-        lines.append(_line("II.  Investments", inv_cy, inv_py, note=9, indent=1))
-        cash_cy = self._cy("LL_AS013") + self._cy("LL_AS014"); cash_py = self._py("LL_AS013") + self._py("LL_AS014")
-        lines.append(_line("III. Cash & Bank Balances", cash_cy, cash_py, note=10, indent=1))
-        tr_cy = self._cy("LL_AS015"); tr_py = self._py("LL_AS015")
-        lines.append(_line("IV.  Trade Receivables", tr_cy, tr_py, note=11, indent=1))
-        la_cy = self._cy("LL_AS016"); la_py = self._py("LL_AS016")
-        lines.append(_line("V.   Loans & Advances", la_cy, la_py, note=12, indent=1))
-        oca_cy= self._cy("LL_AS017"); oca_py= self._py("LL_AS017")
-        lines.append(_line("VI.  Other Current Assets", oca_cy, oca_py, note=13, indent=1))
-        tot_as_cy = fa_cy + inv_cy + cash_cy + tr_cy + la_cy + oca_cy
-        tot_as_py = fa_py + inv_py + cash_py + tr_py + la_py + oca_py
-        lines.append(_grand("TOTAL — ASSETS", tot_as_cy, tot_as_py))
-        return lines
-
-    # ─── AOP / RWA ────────────────────────────────────────────────────────
-
     def _aop_bs(self) -> list[FSLine]:
         lines = [_hdr("BALANCE SHEET"), _blank()]
         lines.append(_sec("FUNDS & LIABILITIES"))
@@ -490,33 +446,6 @@ class FSEngine:
         label = "SURPLUS FOR THE YEAR (I–II)" if sur_cy >= 0 else "DEFICIT FOR THE YEAR (II–I)"
         lines.append(_grand(label, abs(sur_cy), abs(sur_py)))
         return lines
-
-    def _aop_rp(self) -> list[FSLine]:
-        lines = [_hdr("RECEIPT AND PAYMENT ACCOUNT"), _blank()]
-        lines.append(_sec("RECEIPTS"))
-        cash_op_cy = self._py("AO_AS011") + self._py("AO_AS012")
-        lines.append(_line("Opening Balance (Cash & Bank)", cash_op_cy, 0, indent=1))
-        mi_cy = self._cy("AO_IN001")
-        lines.append(_line("Maintenance Charges Received", mi_cy, 0, indent=1))
-        oi_cy = self._cy("AO_IN002") + self._cy("AO_IN003")
-        lines.append(_line("Other Receipts", oi_cy, 0, indent=1))
-        tot_rec = cash_op_cy + mi_cy + oi_cy
-        lines.append(_grand("TOTAL RECEIPTS (A)", tot_rec, 0))
-        lines.append(_blank())
-        lines.append(_sec("PAYMENTS"))
-        est_cy = self._cy("AO_EX001")
-        lines.append(_line("Establishment Expenses", est_cy, 0, indent=1))
-        me_cy  = self._cy("AO_EX002")
-        lines.append(_line("Maintenance Expenses", me_cy, 0, indent=1))
-        adm_cy = self._cy("AO_EX003")
-        lines.append(_line("Administrative Expenses", adm_cy, 0, indent=1))
-        cash_cl = self._cy("AO_AS011") + self._cy("AO_AS012")
-        tot_pay = est_cy + me_cy + adm_cy + cash_cl
-        lines.append(_line("Closing Balance (Cash & Bank)", cash_cl, 0, indent=1))
-        lines.append(_grand("TOTAL PAYMENTS (B)", tot_pay, 0))
-        return lines
-
-    # ─── TRUST / NPO ──────────────────────────────────────────────────────
 
     def _trust_bs(self) -> list[FSLine]:
         lines = [_hdr("BALANCE SHEET"), _blank()]
