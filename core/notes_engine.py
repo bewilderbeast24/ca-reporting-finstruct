@@ -565,7 +565,8 @@ class NotesEngine:
         lines = []
         tot_gross_op = tot_add = tot_dis = tot_gross_cl = 0.0
         tot_dep_op = tot_dep_ch = tot_dep_dis = tot_dep_cl = tot_nbv_cy = tot_nbv_py = 0.0
-        for asset in self._ppe:
+        for raw_asset in self._ppe:
+            asset = dict(raw_asset) if not isinstance(raw_asset, dict) else raw_asset
             gross_op = float(asset.get("gross_op", 0))
             additions= float(asset.get("additions", 0))
             disposals= float(asset.get("disposals", 0))
