@@ -67,6 +67,9 @@ def _e(
 
 
 CO  = [EntityType.COMPANY.value, EntityType.SEC8.value]
+LLP = [EntityType.LLP.value]
+PART = [EntityType.PART.value]
+PROP = [EntityType.PROP.value]
 NCE = [EntityType.LLP.value, EntityType.PROP.value, EntityType.PART.value]
 AOP = [EntityType.AOP.value]
 NPO = [EntityType.TRUST.value]
@@ -204,35 +207,35 @@ MASTER: list[MappingEntry] = [
 
     # ─── LLP FORMAT ───────────────────────────────────────────────────────
 
-    _e("LL001", ["LLP"], "Partners' Capital", "Partners' Capital Account", "Capital Contribution",              "BS", "CR_POSITIVE", 1),
-    _e("LL002", ["LLP"], "Partners' Capital", "Partners' Capital Account", "Accumulated Profit / (Loss)",       "BS", "CR_POSITIVE", 1),
-    _e("LL003", ["LLP"], "Reserves & Surplus", "Reserves & Surplus", "General Reserve",                        "BS", "CR_POSITIVE", 2),
-    _e("LL004", ["LLP"], "Loans", "Secured Loans", "Loans from Banks (Secured)",                                "BS", "CR_POSITIVE", 3),
-    _e("LL005", ["LLP"], "Loans", "Unsecured Loans", "Loans from Partners",                                     "BS", "CR_POSITIVE", 4),
-    _e("LL006", ["LLP"], "Loans", "Unsecured Loans", "Other Unsecured Loans",                                   "BS", "CR_POSITIVE", 4),
-    _e("LL007", ["LLP"], "Current Liabilities", "Trade Payables", "Creditors for Goods",                        "BS", "CR_POSITIVE", 5),
-    _e("LL008", ["LLP"], "Current Liabilities", "Other Current Liabilities", "Other Payables",                  "BS", "CR_POSITIVE", 6),
-    _e("LL009", ["LLP"], "Current Liabilities", "Provisions", "Provision for Tax",                              "BS", "CR_POSITIVE", 7),
-    _e("LL010", ["LLP"], "Fixed Assets", "Fixed Assets", "Tangible Assets (Net Block)",                         "BS", "DR_POSITIVE", 8),
-    _e("LL011", ["LLP"], "Fixed Assets", "Fixed Assets", "Intangible Assets (Net Block)",                       "BS", "DR_POSITIVE", 8),
-    _e("LL012", ["LLP"], "Investments", "Long-Term Investments", "Investments",                                  "BS", "DR_POSITIVE", 9),
-    _e("LL013", ["LLP"], "Current Assets", "Cash & Bank", "Cash in Hand",                                       "BS", "DR_POSITIVE", 10),
-    _e("LL014", ["LLP"], "Current Assets", "Cash & Bank", "Bank Balances",                                      "BS", "DR_POSITIVE", 10),
-    _e("LL015", ["LLP"], "Current Assets", "Debtors", "Trade Receivables",                                      "BS", "DR_POSITIVE", 11),
-    _e("LL016", ["LLP"], "Current Assets", "Loans & Advances", "Loans & Advances",                              "BS", "DR_POSITIVE", 12),
-    _e("LL017", ["LLP"], "Current Assets", "Other Current Assets", "Other Current Assets",                      "BS", "DR_POSITIVE", 13),
+    _e("LL001", LLP, "Partners' Capital", "Partners' Capital Account", "Capital Contribution",              "BS", "CR_POSITIVE", 1),
+    _e("LL002", LLP, "Partners' Capital", "Partners' Capital Account", "Accumulated Profit / (Loss)",       "BS", "CR_POSITIVE", 1),
+    _e("LL003", LLP, "Reserves & Surplus", "Reserves & Surplus", "General Reserve",                        "BS", "CR_POSITIVE", 2),
+    _e("LL004", LLP, "Loans", "Secured Loans", "Loans from Banks (Secured)",                                "BS", "CR_POSITIVE", 3),
+    _e("LL005", LLP, "Loans", "Unsecured Loans", "Loans from Partners",                                     "BS", "CR_POSITIVE", 4),
+    _e("LL006", LLP, "Loans", "Unsecured Loans", "Other Unsecured Loans",                                   "BS", "CR_POSITIVE", 4),
+    _e("LL007", LLP, "Current Liabilities", "Trade Payables", "Creditors for Goods",                        "BS", "CR_POSITIVE", 5),
+    _e("LL008", LLP, "Current Liabilities", "Other Current Liabilities", "Other Payables",                  "BS", "CR_POSITIVE", 6),
+    _e("LL009", LLP, "Current Liabilities", "Provisions", "Provision for Tax",                              "BS", "CR_POSITIVE", 7),
+    _e("LL010", LLP, "Fixed Assets", "Fixed Assets", "Tangible Assets (Net Block)",                         "BS", "DR_POSITIVE", 8),
+    _e("LL011", LLP, "Fixed Assets", "Fixed Assets", "Intangible Assets (Net Block)",                       "BS", "DR_POSITIVE", 8),
+    _e("LL012", LLP, "Investments", "Long-Term Investments", "Investments",                                  "BS", "DR_POSITIVE", 9),
+    _e("LL013", LLP, "Current Assets", "Cash & Bank", "Cash in Hand",                                       "BS", "DR_POSITIVE", 10),
+    _e("LL014", LLP, "Current Assets", "Cash & Bank", "Bank Balances",                                      "BS", "DR_POSITIVE", 10),
+    _e("LL015", LLP, "Current Assets", "Debtors", "Trade Receivables",                                      "BS", "DR_POSITIVE", 11),
+    _e("LL016", LLP, "Current Assets", "Loans & Advances", "Loans & Advances",                              "BS", "DR_POSITIVE", 12),
+    _e("LL017", LLP, "Current Assets", "Other Current Assets", "Other Current Assets",                      "BS", "DR_POSITIVE", 13),
 
     # LLP P&L (ICAI Guidance Note — LLP Financial Statements)
-    _e("LL018", ["LLP"], "Revenue", "Revenue from Operations", "Sale of Products / Services",                   "PL", "CR_POSITIVE", 14),
-    _e("LL019", ["LLP"], "Revenue", "Other Income", "Interest & Other Income",                                  "PL", "CR_POSITIVE", 15),
-    _e("LL020", ["LLP"], "Expenses", "Cost of Materials / Purchases", "Cost of Goods Sold / Purchases",         "PL", "DR_POSITIVE", 16),
-    _e("LL021", ["LLP"], "Expenses", "Changes in Inventories", "Inventory Change (Opening – Closing)",          "PL", "DR_POSITIVE", 16),
-    _e("LL022", ["LLP"], "Expenses", "Employee Benefit Expenses", "Salaries, Wages & Staff Costs",              "PL", "DR_POSITIVE", 17),
-    _e("LL023", ["LLP"], "Expenses", "Partners' Remuneration", "Remuneration to Designated Partners",           "PL", "DR_POSITIVE", 18),
-    _e("LL024", ["LLP"], "Expenses", "Finance Costs", "Interest & Finance Charges",                             "PL", "DR_POSITIVE", 19),
-    _e("LL025", ["LLP"], "Expenses", "Depreciation & Amortisation", "Depreciation & Amortisation",             "PL", "DR_POSITIVE", 20),
-    _e("LL026", ["LLP"], "Expenses", "Other Expenses", "Administrative & Other Expenses",                       "PL", "DR_POSITIVE", 21),
-    _e("LL027", ["LLP"], "Tax",      "Provision for Tax", "Income Tax Provision",                               "PL", "DR_POSITIVE"),
+    _e("LL018", LLP, "Revenue", "Revenue from Operations", "Sale of Products / Services",                   "PL", "CR_POSITIVE", 14),
+    _e("LL019", LLP, "Revenue", "Other Income", "Interest & Other Income",                                  "PL", "CR_POSITIVE", 15),
+    _e("LL020", LLP, "Expenses", "Cost of Materials / Purchases", "Cost of Goods Sold / Purchases",         "PL", "DR_POSITIVE", 16),
+    _e("LL021", LLP, "Expenses", "Changes in Inventories", "Inventory Change (Opening – Closing)",          "PL", "DR_POSITIVE", 16),
+    _e("LL022", LLP, "Expenses", "Employee Benefit Expenses", "Salaries, Wages & Staff Costs",              "PL", "DR_POSITIVE", 17),
+    _e("LL023", LLP, "Expenses", "Partners' Remuneration", "Remuneration to Designated Partners",           "PL", "DR_POSITIVE", 18),
+    _e("LL024", LLP, "Expenses", "Finance Costs", "Interest & Finance Charges",                             "PL", "DR_POSITIVE", 19),
+    _e("LL025", LLP, "Expenses", "Depreciation & Amortisation", "Depreciation & Amortisation",             "PL", "DR_POSITIVE", 20),
+    _e("LL026", LLP, "Expenses", "Other Expenses", "Administrative & Other Expenses",                       "PL", "DR_POSITIVE", 21),
+    _e("LL027", LLP, "Tax",      "Provision for Tax", "Income Tax Provision",                               "PL", "DR_POSITIVE"),
 
     # ─── NCE PROP / PART FORMAT ───────────────────────────────────────────
 
@@ -269,21 +272,21 @@ MASTER: list[MappingEntry] = [
     _e("NP009", NCE,  "Expenses", "Other Expenses", "Administrative & Other Expenses",                           "PL", "DR_POSITIVE", 21),
 
     # PROP-specific expanded BS — Capital Work-in-Progress and Intangibles as separate entries
-    _e("PR001", ["PROP"], "Fixed Assets", "Capital Work-in-Progress", "Capital Work-in-Progress",               "BS", "DR_POSITIVE", 10),
-    _e("PR002", ["PROP"], "Fixed Assets", "Intangible Assets", "Intangible Assets (Net Block)",                  "BS", "DR_POSITIVE", 10),
-    _e("PR003", ["PROP"], "Non-Current Assets", "Long-Term Loans & Advances", "Security Deposits & Advances",   "BS", "DR_POSITIVE", 13),
-    _e("PR004", ["PROP"], "Non-Current Assets", "Other Non-Current Assets", "Other Non-Current Assets",         "BS", "DR_POSITIVE", 14),
-    _e("PR005", ["PROP"], "Current Liabilities", "Long-Term Borrowings", "Long-Term Borrowings (secured)",      "BS", "CR_POSITIVE", 4),
-    _e("PR006", ["PROP"], "Current Liabilities", "Long-Term Provisions", "Long-Term Provisions",                "BS", "CR_POSITIVE", 5),
+    _e("PR001", PROP, "Fixed Assets", "Capital Work-in-Progress", "Capital Work-in-Progress",               "BS", "DR_POSITIVE", 10),
+    _e("PR002", PROP, "Fixed Assets", "Intangible Assets", "Intangible Assets (Net Block)",                  "BS", "DR_POSITIVE", 10),
+    _e("PR003", PROP, "Non-Current Assets", "Long-Term Loans & Advances", "Security Deposits & Advances",   "BS", "DR_POSITIVE", 13),
+    _e("PR004", PROP, "Non-Current Assets", "Other Non-Current Assets", "Other Non-Current Assets",         "BS", "DR_POSITIVE", 14),
+    _e("PR005", PROP, "Current Liabilities", "Long-Term Borrowings", "Long-Term Borrowings (secured)",      "BS", "CR_POSITIVE", 4),
+    _e("PR006", PROP, "Current Liabilities", "Long-Term Provisions", "Long-Term Provisions",                "BS", "CR_POSITIVE", 5),
 
     # PART-specific capital accounts (separate from generic NC001 capital)
-    _e("PT001", ["PART"], "Partners' Capital", "Partners' Fixed Capital", "Fixed Capital Accounts",             "BS", "CR_POSITIVE", 2),
-    _e("PT002", ["PART"], "Partners' Capital", "Partners' Current Account", "Current Accounts (Fluctuating)",   "BS", "CR_POSITIVE", 3),
-    _e("PT003", ["PART"], "Partners' Capital", "Partners' Capital Accounts", "Capital Accounts (Fluctuating)",  "BS", "CR_POSITIVE", 2),
-    _e("PT004", ["PART"], "Appropriation", "Partners' Remuneration", "Remuneration to Partners (Sec 40b)",      "PL", "DR_POSITIVE", 25),
-    _e("PT005", ["PART"], "Appropriation", "Interest on Capital", "Interest on Partners' Capital",              "PL", "DR_POSITIVE", 29),
-    _e("PT006", ["PART"], "Appropriation", "Profit Appropriation", "Share of Profit per Partner",               "PL", "DR_POSITIVE", 29),
-    _e("PT007", ["PART"], "Tax", "Provision for Income Tax", "Current Tax (@ 30% + surcharge)",                 "PL", "DR_POSITIVE", 10),
+    _e("PT001", PART, "Partners' Capital", "Partners' Fixed Capital", "Fixed Capital Accounts",             "BS", "CR_POSITIVE", 2),
+    _e("PT002", PART, "Partners' Capital", "Partners' Current Account", "Current Accounts (Fluctuating)",   "BS", "CR_POSITIVE", 3),
+    _e("PT003", PART, "Partners' Capital", "Partners' Capital Accounts", "Capital Accounts (Fluctuating)",  "BS", "CR_POSITIVE", 2),
+    _e("PT004", PART, "Appropriation", "Partners' Remuneration", "Remuneration to Partners (Sec 40b)",      "PL", "DR_POSITIVE", 25),
+    _e("PT005", PART, "Appropriation", "Interest on Capital", "Interest on Partners' Capital",              "PL", "DR_POSITIVE", 29),
+    _e("PT006", PART, "Appropriation", "Profit Appropriation", "Share of Profit per Partner",               "PL", "DR_POSITIVE", 29),
+    _e("PT007", PART, "Tax", "Provision for Income Tax", "Current Tax (@ 30% + surcharge)",                 "PL", "DR_POSITIVE", 10),
 
     # ─── AOP / RWA FORMAT ──────────────────────────────────────────────────
 
