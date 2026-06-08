@@ -23,6 +23,16 @@ ENTITY_LABELS = {
     EntityType.SEC8:    "Section 8 Company",
 }
 
+ENTITY_FS = {
+    EntityType.COMPANY: {"bs": "Balance Sheet", "pl": "Profit & Loss", "cf": "Cash Flow"},
+    EntityType.LLP:     {"bs": "Balance Sheet", "pl": "Profit & Loss", "cap": "Partners' Capital"},
+    EntityType.PROP:    {"bs": "Balance Sheet", "pl": "Profit & Loss"},
+    EntityType.PART:    {"bs": "Balance Sheet", "pl": "Profit & Loss", "cap": "Partners' Capital"},
+    EntityType.AOP:     {"bs": "Balance Sheet", "ie": "Income & Expenditure", "rp": "Receipt & Payment"},
+    EntityType.TRUST:   {"bs": "Balance Sheet", "ie": "Income & Expenditure", "rp": "Receipt & Payment"},
+    EntityType.SEC8:    {"bs": "Balance Sheet", "ie": "Income & Expenditure", "cf": "Cash Flow"},
+}
+
 AOP_SUBTYPES  = ["RWA", "Club", "AOP_General", "BOI"]
 TRUST_SUBTYPES = ["Public_Charitable_Trust", "Private_Trust", "Section_8_equiv"]
 
@@ -49,13 +59,4 @@ MASTER_TAGS: dict[EntityType, list[str]] = {
 
 def fs_label(entity_type: EntityType) -> dict[str, str]:
     """Return display labels for FS statement tabs."""
-    base = {
-        EntityType.COMPANY: {"bs": "Balance Sheet", "pl": "Profit & Loss", "cf": "Cash Flow"},
-        EntityType.LLP:     {"bs": "Balance Sheet", "pl": "Profit & Loss", "cap": "Partners' Capital"},
-        EntityType.PROP:    {"bs": "Balance Sheet", "pl": "Profit & Loss"},
-        EntityType.PART:    {"bs": "Balance Sheet", "pl": "Profit & Loss", "cap": "Partners' Capital"},
-        EntityType.AOP:     {"bs": "Balance Sheet", "ie": "Income & Expenditure", "rp": "Receipt & Payment"},
-        EntityType.TRUST:   {"bs": "Balance Sheet", "ie": "Income & Expenditure", "rp": "Receipt & Payment"},
-        EntityType.SEC8:    {"bs": "Balance Sheet", "ie": "Income & Expenditure", "cf": "Cash Flow"},
-    }
-    return base.get(entity_type, {"bs": "Balance Sheet", "pl": "Profit & Loss"})
+    return ENTITY_FS.get(entity_type, {"bs": "Balance Sheet", "pl": "Profit & Loss"})
