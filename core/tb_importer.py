@@ -354,6 +354,7 @@ def get_auto_col_map(headers: list[str]) -> dict[str, int | None]:
     return {
         "ledger": _detect_columns_num(headers, COMMON_LEDGER_HEADERS),
         "group":  _detect_columns_num(headers, COMMON_GROUP_HEADERS),
+        "subtype": _detect_columns_num(headers, COMMON_SUBTYPE_HEADERS),
         "debit":  _detect_columns_num(headers, COMMON_DR_HEADERS),
         "credit": _detect_columns_num(headers, COMMON_CR_HEADERS),
         "net":    _detect_columns_num(headers, COMMON_NET_HEADERS),
@@ -397,76 +398,10 @@ def import_tally_xml(path: Path) -> ImportResult:
     return result
 
 
-def _parse_rows(headers: list[str], data_rows, result: ImportResult):
-    ledger_col = _detect_columns_num(headers, COMMON_LEDGER_HEADERS)
-    group_col = _detect_columns_num(headers, COMMON_GROUP_HEADERS)
-    dr_col = _detect_columns_num(headers, COMMON_DR_HEADERS)
-    cr_col = _detect_columns_num(headers, COMMON_CR_HEADERS)
-    net_col = _detect_columns_num(headers, COMMON_NET_HEADERS)
-    pynet_col = _detect_columns_num(headers, COMMON_PYNET_HEADERS)
-
-    result.col_map = {
-        "ledger": ledger_col, "group": group_col, "debit": dr_col,
-        "credit": cr_col, "net": net_col, "py_net": pynet_col,
-    }
-
-    if ledger_col is None:
-        result.errors.append(
-            "Could not detect Ledger column. Please map columns manually."
-        )
-        # Fallback: use first column
-        ledger_col = 0
-
-    # Build subtype index always — even without explicit SubType column,
-    # we can attempt account-name → sub_heading matching as a fallback.
-    subtype_idx = _build_subtype_index()
-    skipped_balancing = 0
-
-    for i, row in enumerate(data_rows, start=2):
-        row = list(row)
-        if all((v is None or str(v).strip() == "") for v in row):
-            continue
-        name = str(row[ledger_col] if ledger_col < len(row) else "").strip()
-        if not name or name.lower() in EXCLUDE_LEDGERS:
-            continue
-        if _is_balancing_line(name):
-            skipped_balancing += 1
-            continue
-        group = str(row[group_col] if group_col is not None and group_col < len(row) else "").strip()
-        dr    = _to_float(row[dr_col]) if dr_col is not None and dr_col < len(row) else 0.0
-        cr    = _to_float(row[cr_col]) if cr_col is not None and cr_col < len(row) else 0.0
-        net   = _to_float(row[net_col]) if net_col is not None and net_col < len(row) else (dr - cr)
-        py    = _to_float(row[pynet_col]) if pynet_col is not None and pynet_col < len(row) else 0.0
-        result.rows.append({
-            "ledger_name": name,
-            "group_name":  group or subtyp,
-            "cy_debit":    dr,
-            "cy_credit":   cr,
-            "cy_net":      net,
-            "py_net":      py,
-            "source":      source,
-        })
-        if subtype_idx and (subtyp or name):
-            code = _lookup_subtype_code(subtyp, subtype_idx, account_name=name)
-            if code:
-                result.subtype_hints[len(result.rows) - 1] = code
-
-    if skipped_balancing:
-        result.warnings.append(
-            f"Skipped {skipped_balancing} 'Current Year Loss / P&L Transfer' balancing row(s)."
-        )
-    if result.subtype_hints:
-        result.warnings.append(
-            f"Auto-mapped {len(result.subtype_hints)} ledger(s) using SubType column."
-        )
-
-    seen: dict[str, int] = {}
-    for r in result.rows:
-        n = r["ledger_name"].lower()
-        seen[n] = seen.get(n, 0) + 1
-    for name, cnt in seen.items():
-        if cnt > 1:
-            result.warnings.append(f"Duplicate ledger: '{name}' appears {cnt} times")
+def _parse_rows(headers: list[str], data_rows, result: ImportResult, source: str = "MANUAL"):
+    col_map = get_auto_col_map(headers)
+    result.col_map = col_map
+    _parse_rows_with_map(headers, data_rows, result, col_map, source=source)
 
 
 def override_columns(
@@ -478,20 +413,23 @@ def override_columns(
     """Re-parse with user-supplied column assignments."""
     result = ImportResult()
     result.col_map = col_map
-    _parse_rows_with_map(headers, raw_rows, result, col_map)
+    _parse_rows_with_map(headers, raw_rows, result, col_map, source="MANUAL")
     return result
 
 
-def _parse_rows_with_map(headers, data_rows, result, col_map):
+def _parse_rows_with_map(headers, data_rows, result, col_map, source: str = "MANUAL"):
     ledger_col = col_map.get("ledger")
     group_col = col_map.get("group")
+    subtype_col = col_map.get("subtype")
     dr_col = col_map.get("debit")
     cr_col = col_map.get("credit")
     net_col = col_map.get("net")
     pynet_col = col_map.get("py_net")
+    
     if ledger_col is None:
         result.errors.append("Ledger column not mapped")
         return
+        
     # Build subtype index always — even without explicit SubType column,
     # we can attempt account-name → sub_heading matching as a fallback.
     subtype_idx = _build_subtype_index()
@@ -504,19 +442,30 @@ def _parse_rows_with_map(headers, data_rows, result, col_map):
         if _is_balancing_line(name):
             skipped_balancing += 1
             continue
+            
         group = str(row[group_col] if group_col is not None and group_col < len(row) else "").strip()
+        subtyp = str(row[subtype_col] if subtype_col is not None and subtype_col < len(row) else "").strip()
+        
         dr  = _to_float(row[dr_col]) if dr_col is not None and dr_col < len(row) else 0.0
         cr  = _to_float(row[cr_col]) if cr_col is not None and cr_col < len(row) else 0.0
         net = _to_float(row[net_col]) if net_col is not None and net_col < len(row) else (dr - cr)
         py  = _to_float(row[pynet_col]) if pynet_col is not None and pynet_col < len(row) else 0.0
+        
         result.rows.append({
-            "ledger_name": name, "group_name": group or subtyp,
-            "cy_debit": dr, "cy_credit": cr, "cy_net": net, "py_net": py, "source": "MANUAL",
+            "ledger_name": name, 
+            "group_name": group or subtyp,
+            "cy_debit": dr, 
+            "cy_credit": cr, 
+            "cy_net": net, 
+            "py_net": py, 
+            "source": source,
         })
+        
         if subtype_idx and (subtyp or name):
             code = _lookup_subtype_code(subtyp, subtype_idx, account_name=name)
             if code:
                 result.subtype_hints[len(result.rows) - 1] = code
+                
     if skipped_balancing:
         result.warnings.append(
             f"Skipped {skipped_balancing} 'Current Year Loss / P&L Transfer' balancing row(s)."
@@ -525,3 +474,12 @@ def _parse_rows_with_map(headers, data_rows, result, col_map):
         result.warnings.append(
             f"Auto-mapped {len(result.subtype_hints)} ledger(s) using SubType column."
         )
+
+    # Duplicate check
+    seen: dict[str, int] = {}
+    for r in result.rows:
+        n = r["ledger_name"].lower()
+        seen[n] = seen.get(n, 0) + 1
+    for name, cnt in seen.items():
+        if cnt > 1:
+            result.warnings.append(f"Duplicate ledger: '{name}' appears {cnt} times")
