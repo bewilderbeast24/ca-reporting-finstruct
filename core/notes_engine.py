@@ -108,6 +108,19 @@ class NotesEngine:
                         line.note = None
         return kept, mapping
 
+    def apply_overrides(self, notes: list[Note], db):
+        """Load and apply manual edits from note_data table."""
+        for note in notes:
+            overrides = db.get_note_data(note.number)
+            if not overrides:
+                continue
+            for seq, data in overrides.items():
+                if seq < len(note.lines):
+                    ln = note.lines[seq]
+                    ln.label = data["label"]
+                    ln.cy = data["cy_value"]
+                    ln.py = data["py_value"]
+
     # ─── Company Notes ─────────────────────────────────────────────────────
 
     def _company_notes(self) -> list[Note]:
