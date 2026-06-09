@@ -113,115 +113,90 @@ class FSEngine:
             py += self._py(entry.code)
         return round(cy, 2), round(py, 2)
 
-    def _evaluate_formula(self, formula: str) -> tuple[float, float]:
+    def _render_generic(self, fs_tag: str, header_label: str) -> list[FSLine]:
         """
-        Evaluate basic formulas like 'GROUP:Name', 'HEADING:Name' or simple additions.
-        This is a simplified evaluator for declarative schemas.
+        Build a report dynamically by traversing the MASTER hierarchy
+        filtered by entity type and fs_tag (BS, PL, IE, etc).
         """
-        if not formula:
-            return 0.0, 0.0
-        
-        # Split by + and - but keep the operators
-        # Pattern: GROUP:xxx | HEADING:xxx | code
-        parts = re.split(r'(\s*[\+\-]\s*)', formula)
-        
-        total_cy, total_py = 0.0, 0.0
-        current_op = '+'
-        
-        for part in parts:
-            part = part.strip()
-            if not part: continue
-            if part in ('+', '-'):
-                current_op = part
-                continue
-            
-            cy, py = 0.0, 0.0
-            if part.startswith("GROUP:"):
-                cy, py = self._get_meta_sum(group=part[6:])
-            elif part.startswith("HEADING:"):
-                cy, py = self._get_meta_sum(heading=part[8:])
-            elif part in self._lookup:
-                cy, py = self._cy(part), self._py(part)
-            
-            if current_op == '+':
-                total_cy += cy
-                total_py += py
-            else:
-                total_cy -= cy
-                total_py -= py
-        
-        return round(total_cy, 2), round(total_py, 2)
+        # 1. Filter entries for this report
+        report_entries = [e for e in self._master_entries if e.fs_tag == fs_tag]
+        if not report_entries:
+            return []
 
-    def _render_schema(self, schema: dict) -> list[FSLine]:
-        """Render a report based on a declarative schema dictionary."""
-        lines: list[FSLine] = []
-        for item in schema.get("layout", []):
-            itype = item.get("type")
-            label = item.get("label", "")
-            indent = item.get("indent", 0)
-            note = item.get("note")
+        lines: list[FSLine] = [_hdr(header_label), _blank()]
+        
+        # 2. Group by (Group -> Heading)
+        # We preserve order from MASTER list
+        groups: dict[str, dict[str, list[MappingEntry]]] = {}
+        ordered_groups: list[str] = []
+        ordered_headings: dict[str, list[str]] = {}
+
+        for e in report_entries:
+            if e.group not in groups:
+                groups[e.group] = {}
+                ordered_groups.append(e.group)
+                ordered_headings[e.group] = []
+            if e.heading not in groups[e.group]:
+                groups[e.group][e.heading] = []
+                ordered_headings[e.group].append(e.heading)
+            groups[e.group][e.heading].append(e)
+
+        # 3. Render Tree
+        for group_name in ordered_groups:
+            lines.append(_sec(group_name))
+            group_cy, group_py = 0.0, 0.0
             
-            if itype == "HEADER":
-                lines.append(_hdr(label))
-            elif itype == "SECTION":
-                lines.append(_sec(label))
-            elif itype == "BLANK":
-                lines.append(_blank())
-            elif itype == "TEXT":
-                lines.append(_line(label, 0, 0, row_type="TEXT"))
-            else:
-                cy, py = 0.0, 0.0
-                if "formula" in item:
-                    cy, py = self._evaluate_formula(item["formula"])
-                elif "heading" in item:
-                    cy, py = self._get_meta_sum(heading=item["heading"])
-                elif "group" in item:
-                    cy, py = self._get_meta_sum(group=item["group"])
-                elif "code" in item:
-                    cy, py = self._cy(item["code"]), self._py(item["code"])
-                elif "codes" in item:
-                    cy, py = self._sum_cy(item["codes"]), self._sum_py(item["codes"])
+            for head_name in ordered_headings[group_name]:
+                entries = groups[group_name][head_name]
                 
-                if itype == "TOTAL":
-                    lines.append(_tot(label, cy, py, note=note))
-                elif itype == "GRAND":
-                    lines.append(_grand(label, cy, py))
-                else:
-                    lines.append(_line(label, cy, py, note=note, indent=indent, row_type=itype))
+                # Sum entries in this heading
+                head_cy = sum(self._cy(e.code) for e in entries)
+                head_py = sum(self._py(e.code) for e in entries)
+                
+                # Use note number from first entry if available
+                note = next((e.note_number for e in entries if e.note_number), None)
+                
+                lines.append(_line(f"    {head_name}", head_cy, head_py, note=note, indent=1))
+                
+                group_cy += head_cy
+                group_py += head_py
+            
+            lines.append(_tot(f"Sub-total — {group_name}", group_cy, group_py))
+            lines.append(_blank())
+
+        # 4. Grand Total
+        total_cy = sum(line.cy for line in lines if line.row_type == "TOTAL")
+        total_py = sum(line.py for line in lines if line.row_type == "TOTAL")
+        
+        # In BS, we often have two Grand Totals (Equity/Liab and Assets)
+        # For now, we'll just put a single Grand Total at the bottom
+        # unless it's a specific report type we want to handle specially.
+        lines.append(_grand("TOTAL", total_cy, total_py))
+        
         return lines
 
     def generate(self, include_cf: bool = True) -> FSDocument:
-        from core.fs_layouts import (
-            COMPANY_BS_SCHEMA, LLP_BS_SCHEMA, COMPANY_PL_SCHEMA,
-            AOP_RP_SCHEMA
-        )
         doc = FSDocument(self._etype, self._fy, self._master, self._div)
         
-        if self._etype in ("COMPANY", "SEC8"):
-            doc.bs = self._render_schema(COMPANY_BS_SCHEMA)
-            if self._etype == "SEC8":
-                doc.ie = self._sec8_ie()
+        # BS is always BS tag
+        doc.bs = self._render_generic("BS", "BALANCE SHEET")
+        
+        # Decide between PL or IE based on entity type
+        if self._etype in ("COMPANY", "SEC8", "LLP", "PROP", "PART", "AOP"):
+            # AOP might have IE in master, let's check
+            ie_entries = [e for e in self._master_entries if e.fs_tag == "IE"]
+            if ie_entries:
+                doc.ie = self._render_generic("IE", "INCOME AND EXPENDITURE ACCOUNT")
             else:
-                doc.pl = self._render_schema(COMPANY_PL_SCHEMA)
-            if include_cf:
-                doc.cf = self._company_cf()
-        elif self._etype == "LLP":
-            doc.bs = self._render_schema(LLP_BS_SCHEMA)
-            doc.pl = self._llp_pl()
-        elif self._etype == "PROP":
-            doc.bs = self._nce_bs()
-            doc.pl = self._nce_pl(["NC", "NP"])
-        elif self._etype == "PART":
-            doc.bs = self._nce_bs()
-            doc.pl = self._nce_pl(["NC", "NP"])
-        elif self._etype == "AOP":
-            doc.bs = self._aop_bs()
-            doc.ie = self._aop_ie()
-            doc.rp = self._render_schema(AOP_RP_SCHEMA)
+                doc.pl = self._render_generic("PL", "STATEMENT OF PROFIT AND LOSS")
         elif self._etype == "TRUST":
-            doc.bs = self._trust_bs()
-            doc.ie = self._trust_ie()
-            doc.rp = self._render_schema(AOP_RP_SCHEMA)
+            doc.ie = self._render_generic("IE", "INCOME AND EXPENDITURE ACCOUNT")
+
+        # Receipts & Payments
+        doc.rp = self._render_generic("RP", "RECEIPT AND PAYMENT ACCOUNT")
+        
+        if include_cf and self._etype in ("COMPANY", "SEC8"):
+            doc.cf = self._company_cf() # CF is still special/hardcoded due to logic complexity
 
         self._check_balance(doc)
         return doc
@@ -249,105 +224,6 @@ class FSEngine:
             doc.bs.append(_line(f"⚠ BS imbalance: {diff:,.2f}", 0, 0, row_type="TEXT"))
 
     # ─── COMPANY BALANCE SHEET (Schedule III Part I) ──────────────────────────
-
-    def _company_pl(self) -> list[FSLine]:
-        lines: list[FSLine] = [_hdr("STATEMENT OF PROFIT AND LOSS"), _blank()]
-
-        rev_cy = self._sum_cy(["CO_IN001","CO_IN002","CO_IN003"]) - self._cy("CO_EX004")
-        rev_py = self._sum_py(["CO_IN001","CO_IN002","CO_IN003"]) - self._py("CO_EX004")
-        lines.append(_line("I.   Revenue from Operations", rev_cy, rev_py, note=21, indent=1))
-        oi_cy = self._sum_cy(["CO_IN005","CO_IN006","CO_IN007","CO_IN008","CO_IN009"])
-        oi_py = self._sum_py(["CO_IN005","CO_IN006","CO_IN007","CO_IN008","CO_IN009"])
-        lines.append(_line("II.  Other Income", oi_cy, oi_py, note=22, indent=1))
-        tot_rev_cy = rev_cy + oi_cy
-        tot_rev_py = rev_py + oi_py
-        lines.append(_tot("III. Total Revenue (I + II)", tot_rev_cy, tot_rev_py))
-        lines.append(_blank())
-
-        lines.append(_line("IV.  Expenses:", 0, 0, row_type="SECTION"))
-        cmc_cy = self._cy("CO_EX010") + self._cy("CO_EX011")
-        cmc_py = self._py("CO_EX010") + self._py("CO_EX011")
-        lines.append(_line("     Cost of Materials Consumed", cmc_cy, cmc_py, note=23, indent=2))
-        pur_cy = self._cy("CO_EX012"); pur_py = self._py("CO_EX012")
-        lines.append(_line("     Purchases of Stock-in-Trade", pur_cy, pur_py, note=24, indent=2))
-        inv_ch_cy = self._sum_cy(["CO_EX013","CO_EX014"]) - self._sum_cy(["CO_IN015","CO_IN016"])
-        inv_ch_py = self._sum_py(["CO_EX013","CO_EX014"]) - self._sum_py(["CO_IN015","CO_IN016"])
-        lines.append(_line("     Changes in Inventories", inv_ch_cy, inv_ch_py, note=25, indent=2))
-        emp_cy = self._sum_cy(["CO_EX017","CO_EX018","CO_EX019","CO_EX020","CO_EX021"])
-        emp_py = self._sum_py(["CO_EX017","CO_EX018","CO_EX019","CO_EX020","CO_EX021"])
-        lines.append(_line("     Employee Benefit Expenses", emp_cy, emp_py, note=26, indent=2))
-        fin_cy = self._sum_cy(["CO_EX022","CO_EX023","CO_EX024"])
-        fin_py = self._sum_py(["CO_EX022","CO_EX023","CO_EX024"])
-        lines.append(_line("     Finance Costs", fin_cy, fin_py, note=27, indent=2))
-        dep_cy = self._cy("CO_EX025") + self._cy("CO_EX026")
-        dep_py = self._py("CO_EX025") + self._py("CO_EX026")
-        lines.append(_line("     Depreciation & Amortisation", dep_cy, dep_py, note=28, indent=2))
-        oe_cy = self._sum_cy([f"PL{i:03d}" for i in range(27,40)])
-        oe_py = self._sum_py([f"PL{i:03d}" for i in range(27,40)])
-        lines.append(_line("     Other Expenses", oe_cy, oe_py, note=29, indent=2))
-        tot_exp_cy = cmc_cy + pur_cy + inv_ch_cy + emp_cy + fin_cy + dep_cy + oe_cy
-        tot_exp_py = cmc_py + pur_py + inv_ch_py + emp_py + fin_py + dep_py + oe_py
-        lines.append(_tot("     Total Expenses (IV)", tot_exp_cy, tot_exp_py))
-        lines.append(_blank())
-
-        pbt_cy = tot_rev_cy - tot_exp_cy
-        pbt_py = tot_rev_py - tot_exp_py
-        lines.append(_grand("V.   Profit/(Loss) before Tax (III – IV)", pbt_cy, pbt_py))
-        tax_cy = self._cy("CO_EX040") + self._cy("CO_EX041")
-        tax_py = self._py("CO_EX040") + self._py("CO_EX041")
-        lines.append(_line("VI.  Tax Expense", tax_cy, tax_py, indent=1))
-        pat_cy = pbt_cy - tax_cy
-        pat_py = pbt_py - tax_py
-        lines.append(_grand("VII. Profit/(Loss) after Tax (V – VI)", pat_cy, pat_py))
-        return lines
-
-    # ─── NCE BALANCE SHEET (Prop / Part / LLP) ────────────────────────────
-
-    def _nce_bs(self) -> list[FSLine]:
-        lines = [_hdr("BALANCE SHEET"), _blank()]
-
-        lines.append(_sec("FUNDS & LIABILITIES"))
-        cap_cy = self._sum_cy(["NC_EL001","NC_EL002"]) - self._cy("NC_AS003")
-        cap_py = self._sum_py(["NC_EL001","NC_EL002"]) - self._py("NC_AS003")
-        lines.append(_line("I.   Capital Account", cap_cy, cap_py, note=1, indent=1))
-        res_cy = self._cy("NC_EL004"); res_py = self._py("NC_EL004")
-        lines.append(_line("II.  Reserves & Surplus", res_cy, res_py, note=2, indent=1))
-        sl_cy = self._cy("NC_EL005");  sl_py = self._py("NC_EL005")
-        lines.append(_line("III. Secured Loans", sl_cy, sl_py, note=3, indent=1))
-        ul_cy = self._cy("NC_EL006");  ul_py = self._py("NC_EL006")
-        lines.append(_line("IV.  Unsecured Loans", ul_cy, ul_py, note=4, indent=1))
-        tp_cy = self._cy("NC_EL007");  tp_py = self._py("NC_EL007")
-        ocl_cy= self._sum_cy(["NC_EL008","NC_EL009","NC_EL010"]); ocl_py = self._sum_py(["NC_EL008","NC_EL009","NC_EL010"])
-        prov_cy = self._cy("NC_EL011"); prov_py = self._py("NC_EL011")
-        cl_cy  = tp_cy + ocl_cy + prov_cy
-        cl_py  = tp_py + ocl_py + prov_py
-        lines.append(_line("V.   Current Liabilities & Provisions", cl_cy, cl_py, note=5, indent=1))
-        tot_fl_cy = cap_cy + res_cy + sl_cy + ul_cy + cl_cy
-        tot_fl_py = cap_py + res_py + sl_py + ul_py + cl_py
-        lines.append(_grand("TOTAL — FUNDS & LIABILITIES", tot_fl_cy, tot_fl_py))
-        lines.append(_blank())
-
-        lines.append(_sec("ASSETS"))
-        fa_gross_cy = self._cy("NC_AS012") + self._cy("NC_AS013")
-        fa_gross_py = self._py("NC_AS012") + self._py("NC_AS013")
-        lines.append(_line("I.   Fixed Assets (Net Block)", fa_gross_cy, fa_gross_py, note=8, indent=1))
-        inv_cy = self._cy("NC_AS014"); inv_py = self._py("NC_AS014")
-        lines.append(_line("II.  Investments", inv_cy, inv_py, note=9, indent=1))
-        cash_cy = self._cy("NC_AS015") + self._cy("NC_AS016")
-        cash_py = self._py("NC_AS015") + self._py("NC_AS016")
-        lines.append(_line("III. Cash & Bank Balances", cash_cy, cash_py, note=10, indent=1))
-        stock_cy = self._cy("NC_AS017"); stock_py = self._py("NC_AS017")
-        lines.append(_line("IV.  Inventories", stock_cy, stock_py, note=11, indent=1))
-        tr_cy = self._cy("NC_AS018");  tr_py = self._py("NC_AS018")
-        lines.append(_line("V.   Trade Receivables (Debtors)", tr_cy, tr_py, note=12, indent=1))
-        la_cy = self._cy("NC_AS019");  la_py = self._py("NC_AS019")
-        lines.append(_line("VI.  Loans & Advances", la_cy, la_py, note=13, indent=1))
-        oca_cy = self._cy("NC_AS020"); oca_py = self._py("NC_AS020")
-        lines.append(_line("VII. Other Current Assets", oca_cy, oca_py, note=14, indent=1))
-        tot_as_cy = fa_gross_cy + inv_cy + cash_cy + stock_cy + tr_cy + la_cy + oca_cy
-        tot_as_py = fa_gross_py + inv_py + cash_py + stock_py + tr_py + la_py + oca_py
-        lines.append(_grand("TOTAL — ASSETS", tot_as_cy, tot_as_py))
-        return lines
 
     def _nce_pl(self, prefixes: list[str]) -> list[FSLine]:
         lines = [_hdr("PROFIT AND LOSS ACCOUNT"), _blank()]
@@ -382,100 +258,6 @@ class FSEngine:
 
     # ─── LLP BS ───────────────────────────────────────────────────────────
 
-    def _aop_bs(self) -> list[FSLine]:
-        lines = [_hdr("BALANCE SHEET"), _blank()]
-        lines.append(_sec("FUNDS & LIABILITIES"))
-        cf_cy = self._cy("AO_EL001"); cf_py = self._py("AO_EL001")
-        lines.append(_line("I.   Capital / Members' Fund", cf_cy, cf_py, note=1, indent=1))
-        em_cy = self._cy("AO_EL002") + self._cy("AO_EL003"); em_py = self._py("AO_EL002") + self._py("AO_EL003")
-        lines.append(_line("II.  Earmarked / Specific Funds", em_cy, em_py, note=2, indent=1))
-        res_cy= self._cy("AO_EL004"); res_py = self._py("AO_EL004")
-        lines.append(_line("III. Reserves & Surplus", res_cy, res_py, note=3, indent=1))
-        sl_cy = self._cy("AO_EL005"); sl_py = self._py("AO_EL005")
-        lines.append(_line("IV.  Secured Loans", sl_cy, sl_py, note=4, indent=1))
-        dep_cy= self._cy("AO_EL006"); dep_py = self._py("AO_EL006")
-        lines.append(_line("V.   Member Deposits (Refundable)", dep_cy, dep_py, note=5, indent=1))
-        ocl_cy= self._cy("AO_EL007") + self._cy("AO_EL008"); ocl_py = self._py("AO_EL007") + self._py("AO_EL008")
-        lines.append(_line("VI.  Other Current Liabilities", ocl_cy, ocl_py, note=6, indent=1))
-        tot_fl_cy = cf_cy + em_cy + res_cy + sl_cy + dep_cy + ocl_cy
-        tot_fl_py = cf_py + em_py + res_py + sl_py + dep_py + ocl_py
-        lines.append(_grand("TOTAL (A)", tot_fl_cy, tot_fl_py))
-        lines.append(_blank())
-        lines.append(_sec("ASSETS"))
-        fa_cy = self._cy("AO_AS009"); fa_py = self._py("AO_AS009")
-        lines.append(_line("I.   Fixed Assets (Net Block)", fa_cy, fa_py, note=7, indent=1))
-        inv_cy= self._cy("AO_AS010"); inv_py = self._py("AO_AS010")
-        lines.append(_line("II.  Investments", inv_cy, inv_py, note=8, indent=1))
-        cash_cy = self._cy("AO_AS011") + self._cy("AO_AS012"); cash_py = self._py("AO_AS011") + self._py("AO_AS012")
-        lines.append(_line("III. Cash & Bank Balances", cash_cy, cash_py, note=9, indent=1))
-        tr_cy = self._cy("AO_AS013"); tr_py = self._py("AO_AS013")
-        lines.append(_line("IV.  Debtors (Maintenance Dues)", tr_cy, tr_py, note=10, indent=1))
-        la_cy = self._cy("AO_AS014"); la_py = self._py("AO_AS014")
-        lines.append(_line("V.   Loans & Advances", la_cy, la_py, note=11, indent=1))
-        oca_cy= self._cy("AO_AS015"); oca_py = self._py("AO_AS015")
-        lines.append(_line("VI.  Other Current Assets", oca_cy, oca_py, note=12, indent=1))
-        tot_as_cy = fa_cy + inv_cy + cash_cy + tr_cy + la_cy + oca_cy
-        tot_as_py = fa_py + inv_py + cash_py + tr_py + la_py + oca_py
-        lines.append(_grand("TOTAL (B)", tot_as_cy, tot_as_py))
-        return lines
-
-    def _aop_ie(self) -> list[FSLine]:
-        lines = [_hdr("INCOME AND EXPENDITURE ACCOUNT"), _blank()]
-        lines.append(_sec("INCOME"))
-        mi_cy = self._cy("AO_IN001"); mi_py = self._py("AO_IN001")
-        lines.append(_line("I.   Maintenance Income", mi_cy, mi_py, note=13, indent=1))
-        oi_cy = self._cy("AO_IN002") + self._cy("AO_IN003"); oi_py = self._py("AO_IN002") + self._py("AO_IN003")
-        lines.append(_line("II.  Other Income", oi_cy, oi_py, note=14, indent=1))
-        tot_i_cy = mi_cy + oi_cy; tot_i_py = mi_py + oi_py
-        lines.append(_grand("TOTAL INCOME (I)", tot_i_cy, tot_i_py))
-        lines.append(_blank())
-        lines.append(_sec("EXPENDITURE"))
-        est_cy = self._cy("AO_EX001"); est_py = self._py("AO_EX001")
-        lines.append(_line("III. Establishment Expenses", est_cy, est_py, note=15, indent=1))
-        me_cy  = self._cy("AO_EX002"); me_py  = self._py("AO_EX002")
-        lines.append(_line("IV.  Maintenance Expenses", me_cy, me_py, note=16, indent=1))
-        adm_cy = self._cy("AO_EX003"); adm_py = self._py("AO_EX003")
-        lines.append(_line("V.   Administrative Expenses", adm_cy, adm_py, note=17, indent=1))
-        dep_cy = self._cy("AO_EX004"); dep_py = self._py("AO_EX004")
-        lines.append(_line("VI.  Depreciation", dep_cy, dep_py, note=18, indent=1))
-        tot_e_cy = est_cy + me_cy + adm_cy + dep_cy
-        tot_e_py = est_py + me_py + adm_py + dep_py
-        lines.append(_grand("TOTAL EXPENDITURE (II)", tot_e_cy, tot_e_py))
-        lines.append(_blank())
-        sur_cy = tot_i_cy - tot_e_cy; sur_py = tot_i_py - tot_e_py
-        label = "SURPLUS FOR THE YEAR (I–II)" if sur_cy >= 0 else "DEFICIT FOR THE YEAR (II–I)"
-        lines.append(_grand(label, abs(sur_cy), abs(sur_py)))
-        return lines
-
-    def _trust_bs(self) -> list[FSLine]:
-        lines = [_hdr("BALANCE SHEET"), _blank()]
-        lines.append(_sec("CORPUS & LIABILITIES"))
-        corp_cy = self._cy("TR_EL001") + self._cy("TR_EL002"); corp_py = self._py("TR_EL001") + self._py("TR_EL002")
-        lines.append(_line("I.   Corpus Fund", corp_cy, corp_py, note=1, indent=1))
-        em_cy = self._cy("TR_EL003") + self._cy("TR_EL004"); em_py = self._py("TR_EL003") + self._py("TR_EL004")
-        lines.append(_line("II.  Earmarked Funds", em_cy, em_py, note=2, indent=1))
-        loan_cy= self._cy("TR_EL005"); loan_py = self._py("TR_EL005")
-        lines.append(_line("III. Loans & Liabilities", loan_cy, loan_py, note=3, indent=1))
-        cl_cy  = self._cy("TR_EL006"); cl_py   = self._py("TR_EL006")
-        lines.append(_line("IV.  Current Liabilities", cl_cy, cl_py, note=4, indent=1))
-        tot_fl_cy = corp_cy + em_cy + loan_cy + cl_cy
-        tot_fl_py = corp_py + em_py + loan_py + cl_py
-        lines.append(_grand("TOTAL", tot_fl_cy, tot_fl_py))
-        lines.append(_blank())
-        lines.append(_sec("ASSETS"))
-        fa_cy = self._cy("TR_AS007"); fa_py = self._py("TR_AS007")
-        lines.append(_line("I.   Fixed Assets (Net Block)", fa_cy, fa_py, note=5, indent=1))
-        inv_cy= self._cy("TR_AS008"); inv_py = self._py("TR_AS008")
-        lines.append(_line("II.  Corpus Investments", inv_cy, inv_py, note=6, indent=1))
-        cash_cy = self._cy("TR_AS009") + self._cy("TR_AS010"); cash_py = self._py("TR_AS009") + self._py("TR_AS010")
-        lines.append(_line("III. Cash & Bank Balances", cash_cy, cash_py, note=7, indent=1))
-        oca_cy = self._cy("TR_AS011"); oca_py = self._py("TR_AS011")
-        lines.append(_line("IV.  Other Current Assets", oca_cy, oca_py, note=8, indent=1))
-        tot_as_cy = fa_cy + inv_cy + cash_cy + oca_cy
-        tot_as_py = fa_py + inv_py + cash_py + oca_py
-        lines.append(_grand("TOTAL", tot_as_cy, tot_as_py))
-        return lines
-
     def _trust_ie(self) -> list[FSLine]:
         lines = [_hdr("INCOME AND EXPENDITURE ACCOUNT"), _blank()]
         lines.append(_sec("INCOME"))
@@ -501,102 +283,6 @@ class FSEngine:
         label = "SURPLUS FOR THE YEAR" if sur_cy >= 0 else "DEFICIT FOR THE YEAR"
         lines.append(_grand(label, abs(sur_cy), abs(sur_py)))
         return lines
-
-    def _trust_rp(self) -> list[FSLine]:
-        lines = [_hdr("RECEIPT AND PAYMENT ACCOUNT"), _blank()]
-        lines.append(_sec("RECEIPTS"))
-        cash_op_cy = self._py("TR_AS009") + self._py("TR_AS010")
-        lines.append(_line("Opening Balance (Cash & Bank)", cash_op_cy, 0, indent=1))
-        don_cy = self._cy("TR_IN001") + self._cy("TR_IN002")
-        lines.append(_line("Donations & Grants Received", don_cy, 0, indent=1))
-        oi_cy = self._cy("TR_IN003") + self._cy("TR_IN004")
-        lines.append(_line("Other Receipts", oi_cy, 0, indent=1))
-        tot_rec = cash_op_cy + don_cy + oi_cy
-        lines.append(_grand("TOTAL RECEIPTS", tot_rec, 0))
-        lines.append(_blank())
-        lines.append(_sec("PAYMENTS"))
-        prog_cy = self._cy("TR_EX001"); adm_cy = self._cy("TR_EX002") + self._cy("TR_EX003")
-        lines.append(_line("Programme Expenses Paid", prog_cy, 0, indent=1))
-        lines.append(_line("Administrative Expenses Paid", adm_cy, 0, indent=1))
-        cash_cl = self._cy("TR_AS009") + self._cy("TR_AS010")
-        lines.append(_line("Closing Balance (Cash & Bank)", cash_cl, 0, indent=1))
-        tot_pay = prog_cy + adm_cy + cash_cl
-        lines.append(_grand("TOTAL PAYMENTS", tot_pay, 0))
-        return lines
-
-    # ─── SEC8 INCOME & EXPENDITURE (reads PL codes, I&E presentation) ────────
-
-    def _sec8_ie(self) -> list[FSLine]:
-        lines = [_hdr("INCOME AND EXPENDITURE ACCOUNT"), _blank()]
-        lines.append(_sec("INCOME"))
-        rev_cy = self._sum_cy(["CO_IN001","CO_IN002","CO_IN003"]) - self._cy("CO_EX004")
-        rev_py = self._sum_py(["CO_IN001","CO_IN002","CO_IN003"]) - self._py("CO_EX004")
-        lines.append(_line("I.   Income from Activities", rev_cy, rev_py, note=21, indent=1))
-        oi_cy  = self._sum_cy(["CO_IN005","CO_IN006","CO_IN007","CO_IN008","CO_IN009"])
-        oi_py  = self._sum_py(["CO_IN005","CO_IN006","CO_IN007","CO_IN008","CO_IN009"])
-        lines.append(_line("II.  Other Income", oi_cy, oi_py, note=22, indent=1))
-        tot_i_cy = rev_cy + oi_cy; tot_i_py = rev_py + oi_py
-        lines.append(_grand("TOTAL INCOME (I)", tot_i_cy, tot_i_py))
-        lines.append(_blank())
-        lines.append(_sec("EXPENDITURE"))
-        emp_cy = self._sum_cy(["CO_EX017","CO_EX018","CO_EX019","CO_EX020","CO_EX021"])
-        emp_py = self._sum_py(["CO_EX017","CO_EX018","CO_EX019","CO_EX020","CO_EX021"])
-        lines.append(_line("III. Programme / Staff Expenses", emp_cy, emp_py, note=26, indent=1))
-        fin_cy = self._sum_cy(["CO_EX022","CO_EX023","CO_EX024"])
-        fin_py = self._sum_py(["CO_EX022","CO_EX023","CO_EX024"])
-        lines.append(_line("IV.  Finance Costs", fin_cy, fin_py, note=27, indent=1))
-        dep_cy = self._cy("CO_EX025") + self._cy("CO_EX026")
-        dep_py = self._py("CO_EX025") + self._py("CO_EX026")
-        lines.append(_line("V.   Depreciation & Amortisation", dep_cy, dep_py, note=28, indent=1))
-        oe_cy  = self._sum_cy([f"PL{i:03d}" for i in range(27, 40)])
-        oe_py  = self._sum_py([f"PL{i:03d}" for i in range(27, 40)])
-        lines.append(_line("VI.  Other Expenses", oe_cy, oe_py, note=29, indent=1))
-        tot_e_cy = emp_cy + fin_cy + dep_cy + oe_cy
-        tot_e_py = emp_py + fin_py + dep_py + oe_py
-        lines.append(_grand("TOTAL EXPENDITURE (II)", tot_e_cy, tot_e_py))
-        lines.append(_blank())
-        sur_cy = tot_i_cy - tot_e_cy; sur_py = tot_i_py - tot_e_py
-        lbl = "SURPLUS FOR THE YEAR (I–II)" if sur_cy >= 0 else "DEFICIT FOR THE YEAR (II–I)"
-        lines.append(_grand(lbl, abs(sur_cy), abs(sur_py)))
-        return lines
-
-    # ─── LLP PROFIT & LOSS (LL_IN018–LL_EX027 codes) ────────────────────────────────
-
-    def _llp_pl(self) -> list[FSLine]:
-        lines = [_hdr("PROFIT AND LOSS ACCOUNT"), _blank()]
-        rev_cy = self._cy("LL_IN018"); rev_py = self._py("LL_IN018")
-        lines.append(_line("I.   Revenue from Operations", rev_cy, rev_py, note=14, indent=1))
-        oi_cy  = self._cy("LL_IN019"); oi_py  = self._py("LL_IN019")
-        lines.append(_line("II.  Other Income", oi_cy, oi_py, note=15, indent=1))
-        tot_i_cy = rev_cy + oi_cy; tot_i_py = rev_py + oi_py
-        lines.append(_tot("III. Total Income", tot_i_cy, tot_i_py))
-        lines.append(_blank())
-        lines.append(_sec("IV.  Expenses:"))
-        cog_cy = self._cy("LL_EX020") + self._cy("LL_EX021")
-        cog_py = self._py("LL_EX020") + self._py("LL_EX021")
-        lines.append(_line("     Cost of Goods / Materials", cog_cy, cog_py, note=16, indent=2))
-        emp_cy = self._cy("LL_EX022"); emp_py = self._py("LL_EX022")
-        lines.append(_line("     Employee Expenses", emp_cy, emp_py, note=17, indent=2))
-        rem_cy = self._cy("LL_EX023"); rem_py = self._py("LL_EX023")
-        lines.append(_line("     Partners' Remuneration", rem_cy, rem_py, note=18, indent=2))
-        fin_cy = self._cy("LL_EX024"); fin_py = self._py("LL_EX024")
-        lines.append(_line("     Finance Costs", fin_cy, fin_py, note=19, indent=2))
-        dep_cy = self._cy("LL_EX025"); dep_py = self._py("LL_EX025")
-        lines.append(_line("     Depreciation & Amortisation", dep_cy, dep_py, note=20, indent=2))
-        oe_cy  = self._cy("LL_EX026"); oe_py  = self._py("LL_EX026")
-        lines.append(_line("     Administrative & Other Expenses", oe_cy, oe_py, note=21, indent=2))
-        tax_cy = self._cy("LL_EX027"); tax_py = self._py("LL_EX027")
-        lines.append(_line("     Provision for Tax", tax_cy, tax_py, indent=2))
-        tot_e_cy = cog_cy + emp_cy + rem_cy + fin_cy + dep_cy + oe_cy + tax_cy
-        tot_e_py = cog_py + emp_py + rem_py + fin_py + dep_py + oe_py + tax_py
-        lines.append(_tot("     Total Expenses", tot_e_cy, tot_e_py))
-        lines.append(_blank())
-        net_cy = tot_i_cy - tot_e_cy; net_py = tot_i_py - tot_e_py
-        lbl = "V.   Net Profit for the year" if net_cy >= 0 else "V.   Net Loss for the year"
-        lines.append(_grand(lbl, net_cy, net_py))
-        return lines
-
-    # ─── CASH FLOW STATEMENT (Indirect Method — COMPANY / SEC8) ──────────────
 
     def _company_cf(self) -> list[FSLine]:
         lines = [_hdr("CASH FLOW STATEMENT"), _blank()]
