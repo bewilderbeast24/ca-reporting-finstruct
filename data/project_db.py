@@ -465,6 +465,21 @@ class ProjectDB:
         ).fetchall()
         return {r[0]: (r[1], r[2]) for r in rows}
 
+    # ── Notes ────────────────────────────────────────────────────────────
+    def get_note_data(self, note_no: int) -> dict[int, dict]:
+        rows = self._conn.execute(
+            "SELECT sequence, label, cy_value, py_value, row_type FROM note_data WHERE note_no=?",
+            (note_no,)
+        ).fetchall()
+        return {r["sequence"]: dict(r) for r in rows}
+
+    def save_note_line(self, note_no: int, seq: int, label: str, cy: float, py: float, row_type: str = "DATA"):
+        with self._tx():
+            self._conn.execute("""
+                INSERT OR REPLACE INTO note_data(note_no, sequence, label, cy_value, py_value, row_type)
+                VALUES(?,?,?,?,?,?)
+            """, (note_no, seq, label, cy, py, row_type))
+
     # ── Audit Log ────────────────────────────────────────────────────────
     def log(self, action: str, detail: str = ""):
         with self._tx():
