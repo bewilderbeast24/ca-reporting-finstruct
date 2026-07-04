@@ -287,6 +287,20 @@ class MappingView(ttk.Frame):
             with open(path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow(["Ledger", "Level 1", "Level 2", "Level 3"])
+                
+                for row in self._rows:
+                    ledger_name = row["ledger"]
+                    lvl1, lvl2, lvl3 = "", "", ""
+                    entry = self._lookup.get(row["code"])
+                    if entry and entry.lookup_name:
+                        parts = [p.strip() for p in entry.lookup_name.split(">")]
+                        if len(parts) >= 3:
+                            lvl1, lvl2, lvl3 = parts[0], parts[1], parts[2]
+                        elif len(parts) == 2:
+                            lvl1, lvl2 = parts[0], parts[1]
+                        elif len(parts) == 1:
+                            lvl1 = parts[0]
+                    writer.writerow([ledger_name, lvl1, lvl2, lvl3])
             messagebox.showinfo("Success", f"Template saved at {path}")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save template: {e}")
