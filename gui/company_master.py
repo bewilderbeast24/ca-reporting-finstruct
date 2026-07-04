@@ -110,16 +110,18 @@ class CompanyMasterForm(ttk.Frame):
             dir_frame.grid(row=r, column=0, columnspan=2, sticky="ew", padx=6, pady=4)
             r += 1
 
-            dir_cols = ("name", "designation", "din", "signs")
+            dir_cols = ("name", "designation", "din", "pan", "signs")
             self._dir_tree = ttk.Treeview(dir_frame, columns=dir_cols,
                                           show="headings", height=5)
             self._dir_tree.heading("name",        text="Name")
             self._dir_tree.heading("designation", text="Designation")
             self._dir_tree.heading("din",         text="DIN")
+            self._dir_tree.heading("pan",         text="PAN")
             self._dir_tree.heading("signs",       text="Signs FS?")
-            self._dir_tree.column("name",        width=180)
-            self._dir_tree.column("designation", width=130)
+            self._dir_tree.column("name",        width=150)
+            self._dir_tree.column("designation", width=120)
             self._dir_tree.column("din",         width=90)
+            self._dir_tree.column("pan",         width=90)
             self._dir_tree.column("signs",       width=70, anchor="center")
             self._dir_tree.pack(side="left", fill="x", expand=True)
 
@@ -204,7 +206,7 @@ class CompanyMasterForm(ttk.Frame):
                 signs = "✔ Yes" if d["is_signing_auth"] else "No"
                 self._dir_tree.insert("", "end", iid=str(d["id"]),
                                       values=(d["name"], d["designation"],
-                                              d["din"] or "", signs))
+                                              d["din"] or "", d["pan"] or "", signs))
         except Exception:
             pass
 
