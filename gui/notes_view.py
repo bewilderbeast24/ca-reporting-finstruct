@@ -85,13 +85,13 @@ class NotesGrid(ttk.Frame):
 
             # Entry for CY/PY
             c_ent = tk.Entry(self._inner, textvariable=c_var, background=bg, foreground=fg, font=font,
-                             justify="right", relief="flat", width=15)
+                             readonlybackground=bg, justify="right", relief="flat", width=15)
             if not self._editable:
                 c_ent.config(state="readonly", takefocus=0)
             c_ent.grid(row=i+1, column=1, sticky="nsew", padx=1, pady=1)
 
             p_ent = tk.Entry(self._inner, textvariable=p_var, background=bg, foreground=fg, font=font,
-                             justify="right", relief="flat", width=15)
+                             readonlybackground=bg, justify="right", relief="flat", width=15)
             if not self._editable:
                 p_ent.config(state="readonly", takefocus=0)
             p_ent.grid(row=i+1, column=2, sticky="nsew", padx=1, pady=1)
