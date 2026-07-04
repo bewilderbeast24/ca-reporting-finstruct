@@ -191,11 +191,18 @@ class MappingView(ttk.Frame):
                 self._mapper.confirm_and_learn(row["ledger"], row["code"])
 
     def _confirm_all_green(self):
+        count = 0
         for row in self._rows:
-            if row["conf"] >= CONF_GREEN:
-                row["confirmed"] = True
+            if row["conf"] and row["conf"] >= CONF_GREEN:
+                if not row.get("confirmed"):
+                    row["confirmed"] = True
+                    count += 1
         self._save_to_db()
         self._render()
+        if count > 0:
+            messagebox.showinfo("Confirmed", f"Successfully confirmed {count} 'green' mappings.")
+        else:
+            messagebox.showinfo("Notice", "No unconfirmed 'green' mappings found.")
 
     def _confirm_all(self):
         unmapped = [r for r in self._rows if not r["code"]]
