@@ -76,12 +76,11 @@ class MappingView(ttk.Frame):
         self._grp_cb.grid(row=0, column=1, padx=4)
         self._hdg_cb.grid(row=0, column=2, padx=4)
         self._sub_cb.grid(row=0, column=3, padx=4)
-        primary_btn(self._ovr_frame, "Apply", command=self._apply_override).grid(
-            row=0, column=4, padx=6)
-        secondary_btn(self._ovr_frame, "Download Template", command=self._download_template).grid(
-            row=0, column=5, padx=6)
-        secondary_btn(self._ovr_frame, "Import Mapping", command=self._import_mapping).grid(
-            row=0, column=6, padx=6)
+        btn_frame = ttk.Frame(self._ovr_frame)
+        btn_frame.grid(row=1, column=0, columnspan=4, sticky="w", pady=(8, 0))
+        primary_btn(btn_frame, "Apply", command=self._apply_override).pack(side="left", padx=(4, 6))
+        secondary_btn(btn_frame, "Download Template", command=self._download_template).pack(side="left", padx=6)
+        secondary_btn(btn_frame, "Import Mapping", command=self._import_mapping).pack(side="left", padx=6)
 
         self._tree_var = get_group_tree()
         self._grp_cb["values"] = list(self._tree_var.keys())
