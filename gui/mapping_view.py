@@ -29,9 +29,9 @@ class MappingView(ttk.Frame):
         top = ttk.Frame(self)
         top.pack(fill="x", padx=8, pady=6)
         label(top, "3.  Mapping Review", style="Sec.TLabel").pack(side="left")
-        primary_btn(top, "▶ Auto-Map All", command=self._run_mapping).pack(side="left", padx=6)
-        secondary_btn(top, "☁ AI Assist (unresolved)", command=self._run_ai_assist).pack(side="left", padx=4)
-        secondary_btn(top, "✔ Confirm All Green", command=self._confirm_all_green).pack(side="left", padx=4)
+        primary_btn(top, "Auto-Map All", command=self._run_mapping).pack(side="left", padx=6)
+        secondary_btn(top, "AI Assist (unresolved)", command=self._run_ai_assist).pack(side="left", padx=4)
+        secondary_btn(top, "Confirm All Green", command=self._confirm_all_green).pack(side="left", padx=4)
         primary_btn(top, "✔ Confirm & Proceed  F9", command=self._confirm_all).pack(side="right", padx=4)
 
         # Status bar
