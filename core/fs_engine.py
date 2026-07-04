@@ -86,11 +86,19 @@ class FSEngine:
 
     def _cy(self, code: str) -> float:
         v = self._totals.get(code, (0.0, 0.0))[0]
-        return _r(v, self._div)
+        val = _r(v, self._div)
+        entry = self._lookup.get(code)
+        if entry and entry.sign == "DR_POSITIVE":
+            return -val
+        return val
 
     def _py(self, code: str) -> float:
         v = self._totals.get(code, (0.0, 0.0))[1]
-        return _r(v, self._div)
+        val = _r(v, self._div)
+        entry = self._lookup.get(code)
+        if entry and entry.sign == "DR_POSITIVE":
+            return -val
+        return val
 
     def _sum_cy(self, codes: list[str]) -> float:
         return round(sum(self._cy(c) for c in codes), 2)
