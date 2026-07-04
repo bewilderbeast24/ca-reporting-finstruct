@@ -78,6 +78,10 @@ class MappingView(ttk.Frame):
         self._sub_cb.grid(row=0, column=3, padx=4)
         primary_btn(self._ovr_frame, "Apply", command=self._apply_override).grid(
             row=0, column=4, padx=6)
+        secondary_btn(self._ovr_frame, "Download Template", command=self._download_template).grid(
+            row=0, column=5, padx=6)
+        secondary_btn(self._ovr_frame, "Import Mapping", command=self._import_mapping).grid(
+            row=0, column=6, padx=6)
 
         self._tree_var = get_group_tree()
         self._grp_cb["values"] = list(self._tree_var.keys())
@@ -268,3 +272,87 @@ class MappingView(ttk.Frame):
                     row["cy"], py_val, int(row["confirmed"]),
                 )
                 break
+
+    def _download_template(self):
+        from tkinter import filedialog
+        import csv
+        path = filedialog.asksaveasfilename(
+            title="Save Mapping Template",
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv")],
+            initialfile="TB_Mapping_Override.csv"
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["Ledger", "Level 1", "Level 2", "Level 3"])
+            messagebox.showinfo("Success", f"Template saved at {path}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save template: {e}")
+
+    def _import_mapping(self):
+        from tkinter import filedialog
+        import csv
+        from pathlib import Path
+        path = filedialog.askopenfilename(
+            title="Import Mapping Override",
+            filetypes=[("CSV Files", "*.csv")]
+        )
+        if not path:
+            return
+        
+        errors = []
+        updates = []
+        try:
+            with open(path, "r", newline="", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                row_num = 1
+                for row in reader:
+                    row_num += 1
+                    ledger = row.get("Ledger", "").strip()
+                    lvl1 = row.get("Level 1", "").strip()
+                    lvl2 = row.get("Level 2", "").strip()
+                    lvl3 = row.get("Level 3", "").strip()
+                    
+                    if not ledger or not lvl1 or not lvl2 or not lvl3:
+                        errors.append(f"Row {row_num}: Missing values. Ledger, Level 1, Level 2, and Level 3 are required.")
+                        continue
+                    
+                    target = f"{lvl1} > {lvl2} > {lvl3}"
+                    code = next((e.code for e in self._lookup.values() if e.lookup_name == target), None)
+                    if not code:
+                        errors.append(f"Row {row_num}: Invalid mapping for '{ledger}'. '{target}' does not exist in schema.")
+                        continue
+                        
+                    found = False
+                    for r in self._rows:
+                        if r["ledger"] == ledger:
+                            updates.append({"row": r, "code": code})
+                            found = True
+                            break
+                    if not found:
+                        errors.append(f"Row {row_num}: Ledger '{ledger}' not found in current project's Trial Balance.")
+                        
+            if errors:
+                err_path = Path(path).parent / "error-report.txt"
+                with open(err_path, "w", encoding="utf-8") as ef:
+                    ef.write("Mapping Import Errors:\n")
+                    ef.write("\n".join(errors))
+                messagebox.showerror("Validation Failed", f"Found {len(errors)} errors.\nReport saved to: {err_path}")
+                return
+                
+            for u in updates:
+                r = u["row"]
+                r["code"] = u["code"]
+                r["conf"] = 1.0
+                r["source"] = "MANUAL"
+                r["confirmed"] = True
+                
+            self._save_to_db()
+            self._render()
+            messagebox.showinfo("Success", f"Successfully imported {len(updates)} overrides.")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to import mapping: {e}")
