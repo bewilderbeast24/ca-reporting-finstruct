@@ -212,7 +212,32 @@ class MappingView(ttk.Frame):
 
     # ── Override Panel ────────────────────────────────────────────────────
     def _on_select(self, event):
-        pass  # override panel reactive on group change
+        iid = self._grid.get_selected_iid()
+        if not iid:
+            return
+            
+        for row in self._rows:
+            if str(row["raw_tb_id"]) == iid:
+                entry = self._lookup.get(row["code"])
+                if entry and entry.lookup_name:
+                    parts = [p.strip() for p in entry.lookup_name.split(">")]
+                    if len(parts) >= 3:
+                        self._grp_var.set(parts[0])
+                        self._hdg_var.set(parts[1])
+                        self._sub_var.set(parts[2])
+                    elif len(parts) == 2:
+                        self._grp_var.set(parts[0])
+                        self._hdg_var.set(parts[1])
+                        self._sub_var.set("")
+                    elif len(parts) == 1:
+                        self._grp_var.set(parts[0])
+                        self._hdg_var.set("")
+                        self._sub_var.set("")
+                else:
+                    self._grp_var.set("")
+                    self._hdg_var.set("")
+                    self._sub_var.set("")
+                break
 
     def _on_group_change(self, *_):
         grp = self._grp_var.get()
@@ -220,6 +245,8 @@ class MappingView(ttk.Frame):
         self._hdg_cb["values"] = hdgs
         if hdgs:
             self._hdg_var.set(hdgs[0])
+        else:
+            self._hdg_var.set("")
 
     def _on_heading_change(self, *_):
         grp = self._grp_var.get(); hdg = self._hdg_var.get()
@@ -227,6 +254,8 @@ class MappingView(ttk.Frame):
         self._sub_cb["values"] = subs
         if subs:
             self._sub_var.set(subs[0])
+        else:
+            self._sub_var.set("")
 
     def _apply_override(self):
         grp = self._grp_var.get()
