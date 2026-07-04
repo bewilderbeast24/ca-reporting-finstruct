@@ -31,6 +31,7 @@ def test_notes_view_with_notes(tk_root, mock_db):
     # Mock connection
     mock_db._conn = MagicMock()
     
-    view._save_all()
+    with patch("tkinter.messagebox.showinfo"):
+        view._save_all()
     mock_db._conn.execute.assert_called_once()
     mock_db._conn.commit.assert_called_once()
