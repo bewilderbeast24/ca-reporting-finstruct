@@ -70,6 +70,8 @@ class MainWindow:
         pm.add_command(label="Rollover to Next FY", command=self._rollover)
         pm.add_command(label="Lock / Finalize Project", command=self._lock_project)
         pm.add_command(label="Audit Log", command=self._show_audit)
+        pm.add_separator()
+        pm.add_command(label="Exit Project", command=self._close_project)
 
         # Generate
         gm = tk.Menu(mb, tearoff=0, bg=T["bg_white"], fg=T["text"],
@@ -208,6 +210,19 @@ class MainWindow:
         self._sdb.add_recent(str(path), name, etype, fy)
         self._status_var.set(f"Opened: {path.name}")
         self._show_entity()
+
+    def _close_project(self):
+        if not self._db:
+            return
+        try:
+            self._db.close()
+        except Exception:
+            pass
+        self._db = None
+        self._project_label.configure(text="")
+        self._fy_label.configure(text="")
+        self._status_var.set("Project closed.")
+        self._show_dashboard()
 
     def _new_project(self):
         self._show_dashboard()
