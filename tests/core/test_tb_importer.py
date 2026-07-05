@@ -10,8 +10,8 @@ def test_strip_dr_cr_text():
 
 def test_to_float():
     assert _to_float("1,000.50") == 1000.50
-    assert _to_float("100 Dr") == 100.0
-    assert _to_float("(100)") == -100.0
+    assert _to_float("100 Dr") == -100.0
+    assert _to_float("(500)") == -500.0
     assert _to_float("-") == 0.0
     assert _to_float("abc") == 0.0
 

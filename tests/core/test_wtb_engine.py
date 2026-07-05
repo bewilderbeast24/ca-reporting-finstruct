@@ -13,7 +13,7 @@ def test_aggregate_by_code():
     assert totals["C2"] == (300.0, 150.0)
 
 def test_compute_net_from_raw():
-    assert compute_net_from_raw({"cy_debit": 100, "cy_credit": 40}, "DR_POSITIVE") == 60
+    assert compute_net_from_raw({"cy_debit": 100, "cy_credit": 40}, "DR_POSITIVE") == -60
     assert compute_net_from_raw({"cy_debit": 100, "cy_credit": 40}, "CR_POSITIVE") == -60
     assert compute_net_from_raw({"cy_net": 50}, "DR_POSITIVE") == 50
 
@@ -22,7 +22,7 @@ def test_apply_adjustments():
     adj = [{"mapping_code": "C1", "dr_amount": 20, "cr_amount": 0}]
     lookup = {"C1": MagicMock(sign="DR_POSITIVE")}
     res = apply_adjustments(totals, adj, lookup)
-    assert res["C1"][0] == 120.0
+    assert res["C1"][0] == 80.0
 
 @patch('core.master_db.get_lookup_map')
 def test_validate_balance(mock_lookup):

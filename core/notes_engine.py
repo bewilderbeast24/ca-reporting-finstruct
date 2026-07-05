@@ -190,14 +190,20 @@ class NotesEngine:
         spr_cy= self._cy("CO_EL005"); spr_py= self._py("CO_EL005")
         gr_cy = self._cy("CO_EL006"); gr_py = self._py("CO_EL006")
         re_cy = self._cy("CO_EL007"); re_py = self._py("CO_EL007")
-        tot_cy= cr_cy+crr_cy+spr_cy+gr_cy+re_cy
-        tot_py= cr_py+crr_py+spr_py+gr_py+re_py
+        pat_cy_raw = sum(v[0] for k, v in self._t.items() if k.startswith("CO_IN") or k.startswith("CO_EX"))
+        pat_py_raw = sum(v[1] for k, v in self._t.items() if k.startswith("CO_IN") or k.startswith("CO_EX"))
+        pat_cy = round(pat_cy_raw / self._div, 2) if self._div else pat_cy_raw
+        pat_py = round(pat_py_raw / self._div, 2) if self._div else pat_py_raw
+
+        tot_cy= cr_cy+crr_cy+spr_cy+gr_cy+re_cy + pat_cy
+        tot_py= cr_py+crr_py+spr_py+gr_py+re_py + pat_py
         n4.lines = [
             _dl("Capital Reserve", cr_cy, cr_py),
             _dl("Capital Redemption Reserve", crr_cy, crr_py),
             _dl("Securities Premium Reserve", spr_cy, spr_py),
             _dl("General Reserve", gr_cy, gr_py),
             _dl("Retained Earnings / Surplus in P&L", re_cy, re_py),
+            _dl("Profit / (Loss) of current year", pat_cy, pat_py),
             _tl("Total", tot_cy, tot_py),
         ]
         notes.append(n4)

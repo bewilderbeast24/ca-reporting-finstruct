@@ -71,12 +71,13 @@ def _to_float(v) -> float:
         sl = s.lower()
         for sfx in ("cr", "credit"):
             if sl.endswith(sfx):
-                suffix_sign = -1
+                suffix_sign = 1
                 s = s[: -len(sfx)].strip()
                 break
         else:
             for sfx in ("dr", "debit"):
                 if sl.endswith(sfx):
+                    suffix_sign = -1
                     s = s[: -len(sfx)].strip()
                     break
         # Handle bracket notation for negatives: (1234) → -1234
@@ -250,15 +251,15 @@ def import_finstruct_template(path: Path, entity_type: str) -> ImportResult:
         if is_net:
             cy_net = _to_float(row[2] if len(row) > 2 else 0)
             py_net = _to_float(row[3] if len(row) > 3 else 0)
-            cy_dr  = cy_net if cy_net >= 0 else 0.0
-            cy_cr  = abs(cy_net) if cy_net < 0 else 0.0
+            cy_dr  = abs(cy_net) if cy_net < 0 else 0.0
+            cy_cr  = cy_net if cy_net >= 0 else 0.0
         else:
             cy_dr  = _to_float(row[2] if len(row) > 2 else 0)
             cy_cr  = _to_float(row[3] if len(row) > 3 else 0)
             py_dr  = _to_float(row[4] if len(row) > 4 else 0)
             py_cr  = _to_float(row[5] if len(row) > 5 else 0)
-            cy_net = cy_dr - cy_cr
-            py_net = py_dr - py_cr
+            cy_net = cy_cr - cy_dr
+            py_net = py_cr - py_dr
 
         if not mapping:
             result.warnings.append(f"Row '{ledger}': no mapping selected — skipped.")
@@ -375,20 +376,20 @@ def import_tally_xml(path: Path) -> ImportResult:
             norm_bal = cl_bal_txt.lower().replace(".", "").strip()
             is_dr = "dr" in norm_bal
             net = _to_float(_strip_dr_cr_text(cl_bal_txt))
-            if not is_dr:
+            if is_dr:
                 net = -net
             op_bal_txt = ledger.findtext("OPENINGBALANCE") or "0"
             op_norm    = op_bal_txt.lower().replace(".", "").strip()
             op_is_dr   = "dr" in op_norm
             py_net     = _to_float(_strip_dr_cr_text(op_bal_txt))
-            if not op_is_dr:
+            if op_is_dr:
                 py_net = -py_net
             if name:
                 result.rows.append({
                     "ledger_name": name,
                     "group_name":  parent,
-                    "cy_debit":    net if net >= 0 else 0,
-                    "cy_credit":   abs(net) if net < 0 else 0,
+                    "cy_debit":    abs(net) if net < 0 else 0,
+                    "cy_credit":   net if net >= 0 else 0,
                     "cy_net":      net,
                     "py_net":      py_net,
                     "source":      "XML",
@@ -448,7 +449,7 @@ def _parse_rows_with_map(headers, data_rows, result, col_map, source: str = "MAN
         
         dr  = _to_float(row[dr_col]) if dr_col is not None and dr_col < len(row) else 0.0
         cr  = _to_float(row[cr_col]) if cr_col is not None and cr_col < len(row) else 0.0
-        net = _to_float(row[net_col]) if net_col is not None and net_col < len(row) else (dr - cr)
+        net = _to_float(row[net_col]) if net_col is not None and net_col < len(row) else (cr - dr)
         py  = _to_float(row[pynet_col]) if pynet_col is not None and pynet_col < len(row) else 0.0
         
         result.rows.append({

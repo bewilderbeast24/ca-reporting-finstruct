@@ -108,7 +108,7 @@ def apply_adjustments(
         dr  = float(adj["dr_amount"] or 0)
         cr  = float(adj["cr_amount"] or 0)
         entry = lookup.get(code)
-        net = (dr - cr) if (not entry or entry.sign == "DR_POSITIVE") else (cr - dr)
+        net = cr - dr
         if code not in result:
             result[code] = [0.0, 0.0]
         result[code][0] += net
@@ -133,26 +133,27 @@ def validate_balance(
         if not e:
             continue
         if e.fs_tag in ("BS",):
-            sign = 1 if e.sign == "CR_POSITIVE" else -1
-            bs_cy += sign * cy
-            bs_py += sign * py
+            bs_cy += cy
+            bs_py += py
         elif e.fs_tag in ("PL", "IE"):
-            sign = 1 if e.sign == "CR_POSITIVE" else -1
-            pl_net_cy += sign * cy
-            pl_net_py += sign * py
+            pl_net_cy += cy
+            pl_net_py += py
 
     errors = []
     warnings = []
+    
+    total_cy_diff = bs_cy + pl_net_cy
+    total_py_diff = bs_py + pl_net_py
 
-    if abs(bs_cy) > 1:
-        errors.append(f"BS does not balance — CY difference: ₹{bs_cy:,.2f}")
-    if abs(bs_py) > 1:
-        warnings.append(f"BS PY does not balance — difference: ₹{bs_py:,.2f}")
+    if abs(total_cy_diff) > 1:
+        errors.append(f"TB does not balance — CY difference: ₹{total_cy_diff:,.2f}")
+    if abs(total_py_diff) > 1:
+        warnings.append(f"TB PY does not balance — difference: ₹{total_py_diff:,.2f}")
 
     return ValidationResult(
         ok              = not errors,
-        balance_diff_cy = bs_cy,
-        balance_diff_py = bs_py,
+        balance_diff_cy = total_cy_diff,
+        balance_diff_py = total_py_diff,
         errors          = errors,
         warnings        = warnings,
     )
@@ -166,4 +167,4 @@ def compute_net_from_raw(row_obj: Any, sign: str) -> float:
     net = float(row.get("cy_net", 0) or 0)
     if net != 0:
         return net
-    return (dr - cr) if sign == "DR_POSITIVE" else (cr - dr)
+    return cr - dr

@@ -16,11 +16,12 @@ def _fmt(v):
 
 class NotesGrid(ttk.Frame):
     """Custom grid for Notes that supports text wrapping and auto-height."""
-    def __init__(self, parent, fy_labels):
+    def __init__(self, parent, fy_labels, editable=True):
         super().__init__(parent)
         self._outer, self._canvas, self._inner = scrolled_frame(self)
         self._outer.pack(fill="both", expand=True)
         self._fy_labels = fy_labels
+        self._editable = editable
         self._rows_data = []  # (l_var, c_var, p_var, tag)
         self._label_widgets = []
 
@@ -79,15 +80,20 @@ class NotesGrid(ttk.Frame):
             self._label_widgets.append(lbl)
 
             # Double-click to edit label
-            lbl.bind("<Double-Button-1>", lambda e, v=l_var: self._edit_label(v))
+            if self._editable:
+                lbl.bind("<Double-Button-1>", lambda e, v=l_var: self._edit_label(v))
 
             # Entry for CY/PY
             c_ent = tk.Entry(self._inner, textvariable=c_var, background=bg, foreground=fg, font=font,
-                             justify="right", relief="flat", width=15)
+                             readonlybackground=bg, justify="right", relief="flat", width=15)
+            if not self._editable:
+                c_ent.config(state="readonly", takefocus=0)
             c_ent.grid(row=i+1, column=1, sticky="nsew", padx=1, pady=1)
 
             p_ent = tk.Entry(self._inner, textvariable=p_var, background=bg, foreground=fg, font=font,
-                             justify="right", relief="flat", width=15)
+                             readonlybackground=bg, justify="right", relief="flat", width=15)
+            if not self._editable:
+                p_ent.config(state="readonly", takefocus=0)
             p_ent.grid(row=i+1, column=2, sticky="nsew", padx=1, pady=1)
 
             self._rows_data.append((l_var, c_var, p_var, tag))
@@ -226,7 +232,8 @@ class NotesView(ttk.Frame):
     def _build_note_tab(self, parent, note: Note):
         ttk.Label(parent, text=f"Note {note.number}: {note.title}",
                   style="Sec.TLabel").pack(anchor="w", padx=8, pady=4)
-        grid = NotesGrid(parent, self._fy_labels)
+        is_editable = note.number in (1, 2, 3, 21, 22, 23, 24)
+        grid = NotesGrid(parent, self._fy_labels, editable=is_editable)
         grid.pack(fill="both", expand=True, padx=8, pady=4)
         rows = []
         for i, ln in enumerate(note.lines):
