@@ -68,44 +68,55 @@ Claude-project_Finstruct/
 ├── finstruct_app.py            Entry point
 ├── finstruct.spec              PyInstaller build spec
 ├── requirements.txt            Python dependencies
-├── finstruct/
-│   ├── config.py               App constants, paths, theme tokens
-│   ├── core/
-│   │   ├── master_db.py        Schedule III + NCE mapping master
-│   │   ├── entity_types.py     Entity type enums / labels
-│   │   ├── fs_engine.py        FS generation engine
-│   │   ├── wtb_engine.py       Working TB aggregation
-│   │   ├── ppe_engine.py       Depreciation calculator (SLM/WDV)
-│   │   ├── notes_engine.py     Notes to Accounts generator
-│   │   ├── mapper.py           AI-assisted ledger mapper
-│   │   ├── tb_importer.py      CSV / XLSX TB importer
-│   │   ├── validator.py        TB validation rules
-│   │   └── rollover.py         FY rollover
-│   ├── data/
-│   │   ├── project_db.py       Per-project SQLite DB
-│   │   ├── settings_db.py      Global settings DB (recent projects)
-│   │   └── encryption.py       Fernet AES-128 for PII fields
-│   ├── export/
-│   │   ├── pdf_exporter.py     ReportLab PDF output
-│   │   ├── docx_exporter.py    python-docx Word output
-│   │   └── xlsx_exporter.py    openpyxl Excel output
-│   └── gui/
-│       ├── theme.py            Design tokens + widget factories
-│       ├── main_window.py      Root window, sidebar, menu
-│       ├── dashboard.py        Recent projects + New Project wizard
-│       ├── company_master.py   Step 1: Entity Setup
-│       ├── tb_import_view.py   Step 2: TB import
-│       ├── mapping_view.py     Step 3: Ledger mapping
-│       ├── wtb_view.py         Step 4: WTB review
-│       ├── ppe_view.py         Step 5: PPE register
-│       ├── fs_viewer.py        Step 6: FS viewer
-│       ├── notes_view.py       Step 7: Notes editor
-│       ├── report_editor.py    Step 8: Report editor
-│       └── export_dialog.py    Step 9: Export dialog
+├── pytest.ini                  Pytest configuration
+├── config.py                   App constants, paths, theme tokens
+├── core/
+│   ├── master_db.py            Schedule III + NCE mapping master
+│   ├── entity_types.py         Entity type enums / labels
+│   ├── fs_engine.py            FS generation engine
+│   ├── wtb_engine.py           Working TB aggregation
+│   ├── ppe_engine.py           Depreciation calculator (SLM/WDV)
+│   ├── notes_engine.py         Notes to Accounts generator
+│   ├── mapper.py               AI-assisted ledger mapper
+│   ├── tb_importer.py          CSV / XLSX TB importer
+│   ├── validator.py            TB validation rules
+│   └── rollover.py             FY rollover
+├── data/
+│   ├── project_db.py           Per-project SQLite DB
+│   ├── settings_db.py          Global settings DB (recent projects)
+│   └── encryption.py           Fernet AES-128 for PII fields
+├── export/
+│   ├── pdf_exporter.py         ReportLab PDF output
+│   ├── docx_exporter.py        python-docx Word output
+│   └── xlsx_exporter.py        openpyxl Excel output
+├── gui/
+│   ├── theme.py                Design tokens + widget factories
+│   ├── main_window.py          Root window, sidebar, menu
+│   ├── dashboard.py            Recent projects + New Project wizard
+│   ├── company_master.py       Step 1: Entity Setup
+│   ├── tb_import_view.py       Step 2: TB import
+│   ├── mapping_view.py         Step 3: Ledger mapping
+│   ├── wtb_view.py             Step 4: WTB review
+│   ├── ppe_view.py             Step 5: PPE register
+│   ├── fs_viewer.py            Step 6: FS viewer
+│   ├── notes_view.py           Step 7: Notes editor
+│   ├── report_editor.py        Step 8: Report editor
+│   └── export_dialog.py        Step 9: Export dialog
+├── tests/                      Test suite
 └── docs/
     ├── SRS_FRS.md
     ├── DESIGN.md
     └── USE_CASE.md
+```
+
+---
+
+## Testing
+
+We use `pytest` for unit and integration tests. To run the test suite:
+
+```cmd
+pytest
 ```
 
 ---
