@@ -1,0 +1,407 @@
+"""ML Mapping Grid — ledger → ICAI head with confidence colours."""
+
+from __future__ import annotations
+import tkinter as tk
+from tkinter import ttk, messagebox
+import threading
+from config import THEME as T
+from core.mapper import Mapper, CONF_GREEN, CONF_YELLOW
+from core.master_db import get_group_tree, get_lookup_map
+from gui.theme import primary_btn, secondary_btn, label
+
+
+class MappingView(ttk.Frame):
+    def __init__(self, parent, db, settings_db, entity_type: str,
+                 on_complete: callable = None):
+        super().__init__(parent)
+        self._db         = db
+        self._sdb        = settings_db
+        self._etype      = entity_type
+        self._on_complete = on_complete
+        self._mapper: Mapper | None = None
+        self._rows: list[dict] = []
+        self._lookup = get_lookup_map()
+        self._build()
+        self._load_async()
+
+    # ── UI Build ─────────────────────────────────────────────────────────
+    def _build(self):
+        top = ttk.Frame(self)
+        top.pack(fill="x", padx=8, pady=6)
+        label(top, "3.  Mapping Review", style="Sec.TLabel").pack(side="left")
+        primary_btn(top, "Auto-Map All", command=self._run_mapping).pack(side="left", padx=6)
+        secondary_btn(top, "AI Assist (unresolved)", command=self._run_ai_assist).pack(side="left", padx=4)
+        secondary_btn(top, "Confirm All Green", command=self._confirm_all_green).pack(side="left", padx=4)
+        primary_btn(top, "✔ Confirm & Proceed  F9", command=self._confirm_all).pack(side="right", padx=4)
+
+        # Status bar
+        self._status_var = tk.StringVar(value="Loading …")
+        ttk.Label(self, textvariable=self._status_var,
+                  style="Muted.TLabel").pack(fill="x", padx=8)
+
+        # Grid
+        cols = [
+            ("ledger",   "Ledger Name (TB)",         240, "w"),
+            ("group",    "TB Group",                  120, "w"),
+            ("mapped",   "Mapped Head (Schedule III)", 280, "w"),
+            ("conf",     "Confidence",                 80,  "center"),
+            ("source",   "Source",                     70,  "center"),
+            ("cy",       "CY Amount ₹",                110, "e"),
+            ("py",       "PY Amount ₹",                110, "e"),
+        ]
+        from gui.fs_grid_view import EditableGrid
+        self._grid = EditableGrid(self, columns=cols,
+                                  on_cell_change=self._on_cell_change,
+                                  editable_cols={"py"})
+        self._grid.pack(fill="both", expand=True, padx=8, pady=4)
+
+        # Hint: PY editing
+        ttk.Label(self,
+                  text="💡 Double-click any 'PY Amount ₹' cell to enter Previous Year figures.",
+                  style="Muted.TLabel").pack(fill="x", padx=8, pady=(0, 4))
+
+        # Override panel (shown when row is selected)
+        self._ovr_frame = ttk.Frame(self, style="Card.TFrame", padding=6)
+        self._ovr_frame.pack(fill="x", padx=8, pady=4)
+        label(self._ovr_frame, "Override Mapping:").grid(row=0, column=0, padx=4)
+        self._grp_var  = tk.StringVar()
+        self._hdg_var  = tk.StringVar()
+        self._sub_var  = tk.StringVar()
+        self._grp_cb = ttk.Combobox(self._ovr_frame, textvariable=self._grp_var,
+                                    state="readonly", width=28)
+        self._hdg_cb = ttk.Combobox(self._ovr_frame, textvariable=self._hdg_var,
+                                    state="readonly", width=28)
+        self._sub_cb = ttk.Combobox(self._ovr_frame, textvariable=self._sub_var,
+                                    state="readonly", width=32)
+        self._grp_cb.grid(row=0, column=1, padx=4)
+        self._hdg_cb.grid(row=0, column=2, padx=4)
+        self._sub_cb.grid(row=0, column=3, padx=4)
+        btn_frame = ttk.Frame(self._ovr_frame)
+        btn_frame.grid(row=1, column=0, columnspan=4, sticky="w", pady=(8, 0))
+        primary_btn(btn_frame, "Apply", command=self._apply_override).pack(side="left", padx=(4, 6))
+        secondary_btn(btn_frame, "Download Template", command=self._download_template).pack(side="left", padx=6)
+        secondary_btn(btn_frame, "Import Mapping", command=self._import_mapping).pack(side="left", padx=6)
+
+        self._tree_var = get_group_tree()
+        self._grp_cb["values"] = list(self._tree_var.keys())
+        self._grp_var.trace_add("write", self._on_group_change)
+        self._hdg_var.trace_add("write", self._on_heading_change)
+
+        self._grid.tree.bind("<<TreeviewSelect>>", self._on_select)
+
+    # ── Data ─────────────────────────────────────────────────────────────
+    def _load_async(self):
+        def work():
+            self._mapper = Mapper(self._etype, self._sdb)
+            raw_rows  = self._db.get_raw_tb()
+            wtb_rows  = self._db.get_wtb()
+            wtb_by_id = {w["raw_tb_id"]: w for w in wtb_rows}
+            self._rows = []
+            for raw in raw_rows:
+                w = wtb_by_id.get(raw["id"])
+                self._rows.append({
+                    "raw_tb_id":  raw["id"],
+                    "ledger":     raw["ledger_name"],
+                    "group":      raw["group_name"] or "",
+                    "code":       (w["mapping_code"] if w else "") or "",
+                    "conf":       (w["confidence"]   if w else 0.0) or 0.0,
+                    "source":     (w["confidence_source"] if w else "") or "",
+                    "cy":         (w["cy_net"] if w else 0.0) or raw["cy_net"] or 0.0,
+                    "py":         (w["py_net"] if w else 0.0) or raw["py_net"] or 0.0,
+                    "confirmed":  bool(w["is_confirmed"] if w else 0),
+                })
+            self.after(0, self._render)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _run_mapping(self):
+        if not self._mapper:
+            return
+        self._status_var.set("Running ML mapping …")
+        def work():
+            for row in self._rows:
+                if row["confirmed"]:
+                    continue
+                res = self._mapper.map_ledger(row["ledger"])
+                row["code"]   = res.code
+                row["conf"]   = res.confidence
+                row["source"] = res.source
+                row["confirmed"] = (res.confidence >= CONF_GREEN)
+            self.after(0, self._render)
+            self.after(0, self._save_to_db)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _run_ai_assist(self):
+        unresolved = [r["ledger"] for r in self._rows
+                      if r["conf"] < CONF_YELLOW and not r["confirmed"]]
+        if not unresolved:
+            messagebox.showinfo("AI Assist", "No unresolved mappings."); return
+            
+        provider = self._sdb.get_ai_provider()
+        self._status_var.set(f"Sending {len(unresolved)} ledgers to {provider} API …")
+        def work():
+            result = self._mapper.map_via_ai(unresolved)
+            for row in self._rows:
+                code = result.get(row["ledger"])
+                if code and code in self._lookup:
+                    row["code"]   = code
+                    row["conf"]   = 0.90
+                    row["source"] = "API"
+            self.after(0, self._render)
+            self.after(0, self._save_to_db)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _render(self):
+        grid_rows = []
+        g = 0; y = 0; r = 0
+        for row in self._rows:
+            entry = self._lookup.get(row["code"])
+            mapped_label = entry.lookup_name if entry else (row["code"] or "— Not Mapped —")
+            conf   = row["conf"]
+            conf_s = f"{conf:.0%}" if conf else "—"
+            tag    = "green" if conf >= CONF_GREEN else ("yellow" if conf >= CONF_YELLOW else "red")
+            if conf < CONF_GREEN: r += 1
+            if conf < CONF_YELLOW: y += 1
+            cy_s = f"{row['cy']:,.2f}" if row["cy"] else "—"
+            py_s = f"{row['py']:,.2f}" if row["py"] else "—"
+            grid_rows.append({
+                "iid":    str(row["raw_tb_id"]),
+                "tag":    tag,
+                "values": [row["ledger"], row["group"], mapped_label,
+                           conf_s, row["source"], cy_s, py_s],
+            })
+            if tag == "green": g += 1
+        self._grid.load_rows(grid_rows)
+        total = len(self._rows)
+        self._status_var.set(
+            f"Total: {total}  |  ✅ Confirmed: {g}  |  ⚠ Review: {y-r}  |  🔴 Unresolved: {r}"
+        )
+
+    def _save_to_db(self):
+        for row in self._rows:
+            entry = self._lookup.get(row["code"])
+            sign  = entry.sign if entry else "DR_POSITIVE"
+            cy    = row["cy"]
+            py    = row["py"]
+            self._db.upsert_wtb(
+                row["raw_tb_id"], row["code"],
+                row["conf"], row["source"],
+                cy, py, int(row["confirmed"])
+            )
+            if row["confirmed"] and row["code"]:
+                self._mapper.confirm_and_learn(row["ledger"], row["code"])
+
+    def _confirm_all_green(self):
+        count = 0
+        for row in self._rows:
+            if row["conf"] and row["conf"] >= CONF_GREEN:
+                if not row.get("confirmed"):
+                    row["confirmed"] = True
+                    count += 1
+        self._save_to_db()
+        self._render()
+        if count > 0:
+            messagebox.showinfo("Confirmed", f"Successfully confirmed {count} 'green' mappings.")
+        else:
+            messagebox.showinfo("Notice", "No unconfirmed 'green' mappings found.")
+
+    def _confirm_all(self):
+        unmapped = [r for r in self._rows if not r["code"]]
+        if unmapped:
+            messagebox.showerror("Cannot Proceed",
+                f"{len(unmapped)} ledger(s) not mapped. Resolve red rows first.")
+            return
+        for row in self._rows:
+            row["confirmed"] = True
+        self._save_to_db()
+        self._render()
+        if self._on_complete:
+            self._on_complete()
+
+    # ── Override Panel ────────────────────────────────────────────────────
+    def _on_select(self, event):
+        iid = self._grid.get_selected_iid()
+        if not iid:
+            return
+            
+        for row in self._rows:
+            if str(row["raw_tb_id"]) == iid:
+                entry = self._lookup.get(row["code"])
+                if entry and entry.lookup_name:
+                    parts = [p.strip() for p in entry.lookup_name.split(">")]
+                    if len(parts) >= 3:
+                        self._grp_var.set(parts[0])
+                        self._hdg_var.set(parts[1])
+                        self._sub_var.set(parts[2])
+                    elif len(parts) == 2:
+                        self._grp_var.set(parts[0])
+                        self._hdg_var.set(parts[1])
+                        self._sub_var.set("")
+                    elif len(parts) == 1:
+                        self._grp_var.set(parts[0])
+                        self._hdg_var.set("")
+                        self._sub_var.set("")
+                else:
+                    self._grp_var.set("")
+                    self._hdg_var.set("")
+                    self._sub_var.set("")
+                break
+
+    def _on_group_change(self, *_):
+        grp = self._grp_var.get()
+        hdgs = list(self._tree_var.get(grp, {}).keys())
+        self._hdg_cb["values"] = hdgs
+        if hdgs:
+            self._hdg_var.set(hdgs[0])
+        else:
+            self._hdg_var.set("")
+
+    def _on_heading_change(self, *_):
+        grp = self._grp_var.get(); hdg = self._hdg_var.get()
+        subs = self._tree_var.get(grp, {}).get(hdg, [])
+        self._sub_cb["values"] = subs
+        if subs:
+            self._sub_var.set(subs[0])
+        else:
+            self._sub_var.set("")
+
+    def _apply_override(self):
+        grp = self._grp_var.get()
+        hdg = self._hdg_var.get()
+        sub = self._sub_var.get()
+        if not (grp and hdg and sub):
+            return
+        # Find code
+        target = f"{grp} > {hdg} > {sub}"
+        code = next((e.code for e in self._lookup.values()
+                     if e.lookup_name == target), None)
+        if not code:
+            return
+        iid = self._grid.get_selected_iid()
+        if not iid:
+            return
+        for row in self._rows:
+            if str(row["raw_tb_id"]) == iid:
+                row["code"]      = code
+                row["conf"]      = 1.0
+                row["source"]    = "MANUAL"
+                row["confirmed"] = True
+                break
+        self._save_to_db()
+        self._render()
+
+    def _on_cell_change(self, iid: str, col_id: str, new_val: str):
+        if col_id != "py":
+            return
+        try:
+            cleaned = new_val.replace(",", "").replace("₹", "").strip()
+            py_val = float(cleaned) if cleaned and cleaned != "—" else 0.0
+        except ValueError:
+            return
+        for row in self._rows:
+            if str(row["raw_tb_id"]) == iid:
+                row["py"] = py_val
+                # Save immediately so PY persists even before "Confirm"
+                self._db.upsert_wtb(
+                    row["raw_tb_id"], row["code"],
+                    row["conf"], row["source"],
+                    row["cy"], py_val, int(row["confirmed"]),
+                )
+                break
+
+    def _download_template(self):
+        from tkinter import filedialog
+        import csv
+        path = filedialog.asksaveasfilename(
+            title="Save Mapping Template",
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv")],
+            initialfile="TB_Mapping_Override.csv"
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["Ledger", "Level 1", "Level 2", "Level 3"])
+                
+                for row in self._rows:
+                    ledger_name = row["ledger"]
+                    lvl1, lvl2, lvl3 = "", "", ""
+                    entry = self._lookup.get(row["code"])
+                    if entry and entry.lookup_name:
+                        parts = [p.strip() for p in entry.lookup_name.split(">")]
+                        if len(parts) >= 3:
+                            lvl1, lvl2, lvl3 = parts[0], parts[1], parts[2]
+                        elif len(parts) == 2:
+                            lvl1, lvl2 = parts[0], parts[1]
+                        elif len(parts) == 1:
+                            lvl1 = parts[0]
+                    writer.writerow([ledger_name, lvl1, lvl2, lvl3])
+            messagebox.showinfo("Success", f"Template saved at {path}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save template: {e}")
+
+    def _import_mapping(self):
+        from tkinter import filedialog
+        import csv
+        from pathlib import Path
+        path = filedialog.askopenfilename(
+            title="Import Mapping Override",
+            filetypes=[("CSV Files", "*.csv")]
+        )
+        if not path:
+            return
+        
+        errors = []
+        updates = []
+        try:
+            with open(path, "r", newline="", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                row_num = 1
+                for row in reader:
+                    row_num += 1
+                    ledger = row.get("Ledger", "").strip()
+                    lvl1 = row.get("Level 1", "").strip()
+                    lvl2 = row.get("Level 2", "").strip()
+                    lvl3 = row.get("Level 3", "").strip()
+                    
+                    if not ledger or not lvl1 or not lvl2 or not lvl3:
+                        errors.append(f"Row {row_num}: Missing values. Ledger, Level 1, Level 2, and Level 3 are required.")
+                        continue
+                    
+                    target = f"{lvl1} > {lvl2} > {lvl3}"
+                    code = next((e.code for e in self._lookup.values() if e.lookup_name == target), None)
+                    if not code:
+                        errors.append(f"Row {row_num}: Invalid mapping for '{ledger}'. '{target}' does not exist in schema.")
+                        continue
+                        
+                    found = False
+                    for r in self._rows:
+                        if r["ledger"] == ledger:
+                            updates.append({"row": r, "code": code})
+                            found = True
+                            break
+                    if not found:
+                        errors.append(f"Row {row_num}: Ledger '{ledger}' not found in current project's Trial Balance.")
+                        
+            if errors:
+                err_path = Path(path).parent / "error-report.txt"
+                with open(err_path, "w", encoding="utf-8") as ef:
+                    ef.write("Mapping Import Errors:\n")
+                    ef.write("\n".join(errors))
+                messagebox.showerror("Validation Failed", f"Found {len(errors)} errors.\nReport saved to: {err_path}")
+                return
+                
+            for u in updates:
+                r = u["row"]
+                r["code"] = u["code"]
+                r["conf"] = 1.0
+                r["source"] = "MANUAL"
+                r["confirmed"] = True
+                
+            self._save_to_db()
+            self._render()
+            messagebox.showinfo("Success", f"Successfully imported {len(updates)} overrides.")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to import mapping: {e}")

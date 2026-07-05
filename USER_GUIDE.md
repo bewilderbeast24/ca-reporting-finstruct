@@ -758,15 +758,15 @@ Grid appears:
 ```
 Ledger Name          | Suggested Code    | Confidence | Action
 ─────────────────────────────────────────────────────
-Bank A/c-HDFC        | AS024 Cash        | 0.97 (Green) | ✓ Accept
-ICICI OD             | EL020 Short-term  | 0.89 (Green) | ✓ Accept
-Cash in Hand         | AS023 Cash        | 0.98 (Green) | ✓ Accept
-Receivables-Trade    | AS021 TR Rec      | 0.92 (Green) | ✓ Accept
-Payables-Trade       | EL026 TP-Others   | 0.78 (Yellow)| ⚠ Review → Select EL026 ✓
-Advances to Vendor   | AS030 ST Loan     | 0.42 (Red)   | ✗ Manual: Select AS027
-Software License     | AS004 Intangible  | 0.85 (Green) | ✓ Accept
-Employee Advances    | AS030 ST Loan     | 0.72 (Yellow)| ⚠ Review → Select AS028 ✓
-Salary Payable       | EL029 Other Curr  | 0.68 (Yellow)| ⚠ Review → Select EL029 ✓
+Bank A/c-HDFC        | CO_AS024 Cash        | 0.97 (Green) | ✓ Accept
+ICICI OD             | CO_EL020 Short-term  | 0.89 (Green) | ✓ Accept
+Cash in Hand         | CO_AS023 Cash        | 0.98 (Green) | ✓ Accept
+Receivables-Trade    | CO_AS021 TR Rec      | 0.92 (Green) | ✓ Accept
+Payables-Trade       | CO_EL026 TP-Others   | 0.78 (Yellow)| ⚠ Review → Select CO_EL026 ✓
+Advances to Vendor   | CO_AS030 ST Loan     | 0.42 (Red)   | ✗ Manual: Select CO_AS027
+Software License     | CO_AS004 Intangible  | 0.85 (Green) | ✓ Accept
+Employee Advances    | CO_AS030 ST Loan     | 0.72 (Yellow)| ⚠ Review → Select CO_AS028 ✓
+Salary Payable       | CO_EL029 Other Curr  | 0.68 (Yellow)| ⚠ Review → Select CO_EL029 ✓
 ...
 ```
 
@@ -792,7 +792,7 @@ Difference:                               ₹10 (rounding ok)
 
 Add adjustment (deferred interest accrual):
 - Click **+ New Adjustment**
-- Ledger: Interest Payable | Code: EL030 | Dr: 0 | Cr: 1,50,000 | Narration: "Accrued for Q4"
+- Ledger: Interest Payable | Code: CO_EL030 | Dr: 0 | Cr: 1,50,000 | Narration: "Accrued for Q4"
 - Click **Save**
 
 Updated WTB:
@@ -802,7 +802,7 @@ Total Liabilities:   ₹5,50,01,510 (updated)
 Difference:          ₹1,510 (recheck → found: Retention payable not mapped)
 ```
 
-Re-check mapping for "Retention A/c" → map to **EL029**  
+Re-check mapping for "Retention A/c" → map to **CO_EL029**  
 Re-generate WTB → difference = 0 ✓
 
 → Proceed to Step 5
@@ -899,8 +899,8 @@ Click **Generate FS** → 3 seconds later:
 **Step 7: Auto-Populate Notes**
 
 App fills:
-- **Note 3 (Share Capital):** 10,00,000 (from EL001+EL002 mapping)
-- **Note 4 (Reserves):** 2,85,00,000 (from EL003-EL008 aggregate)
+- **Note 3 (Share Capital):** 10,00,000 (from CO_EL001+CO_EL002 mapping)
+- **Note 4 (Reserves):** 2,85,00,000 (from CO_EL003-CO_EL008 aggregate)
 - **Note 9 (Trade Payables):** 1,20,00,000 with ageing schedule (auto-calculated)
 - **Note 12 (PPE):** Table with Asset, Gross, Depreciation, NBV (from PPE register)
 - **Note 17 (Trade Receivables):** 2,80,00,000 with ageing schedule
