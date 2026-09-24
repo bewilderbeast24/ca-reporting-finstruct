@@ -76,9 +76,9 @@ class MappingView(ttk.Frame):
 
         # Grid
         cols = [
-            ("ledger",   "Ledger Name (TB)",         260, "w",      200, False),
-            ("group",    "TB Group",                  140, "w",      120, False),
-            ("mapped",   "Mapped Head (Schedule III)", 380, "w",      300, False),
+            ("ledger",   "Ledger Name (TB)",         240, "w",      180, False),
+            ("group",    "TB Group",                  320, "w",      220, False),
+            ("mapped",   "Mapped Head (Schedule III)", 160, "center", 120, False),
             ("conf",     "Confidence",                 90,  "center",  80, False),
             ("source",   "Source",                     80,  "center",  70, False),
             ("cy",       "CY Amount ₹",                120, "e",      100, False),
@@ -219,8 +219,8 @@ class MappingView(ttk.Frame):
             elif s_choice == "Confirmed (Green)" and tag != "green":
                 continue
 
-            entry = self._lookup.get(row["code"])
-            mapped_label = entry.lookup_name if entry else (row["code"] or "— Not Mapped —")
+            code = row["code"] or ""
+            mapped_label = code if code else "— Not Mapped —"
             cy_s = f"{row['cy']:,.2f}" if row["cy"] else "—"
             py_s = f"{row['py']:,.2f}" if row["py"] else "—"
             grid_rows.append({
@@ -248,6 +248,8 @@ class MappingView(ttk.Frame):
                 row["conf"], row["source"],
                 cy, py, int(row["confirmed"])
             )
+            if hasattr(self._db, "update_raw_tb_group"):
+                self._db.update_raw_tb_group(row["raw_tb_id"], row.get("group", ""))
             if row["confirmed"] and row["code"] and self._mapper:
                 self._mapper.confirm_and_learn(row["ledger"], row["code"])
 
@@ -422,6 +424,7 @@ class MappingView(ttk.Frame):
             return
         for row in self._rows:
             if str(row["raw_tb_id"]) == iid:
+                row["group"]     = target
                 row["code"]      = code
                 row["conf"]      = 1.0
                 row["source"]    = "MANUAL"
@@ -523,7 +526,7 @@ class MappingView(ttk.Frame):
                     found = False
                     for r in self._rows:
                         if r["ledger"] == ledger:
-                            updates.append({"row": r, "code": code})
+                            updates.append({"row": r, "code": code, "target": target})
                             found = True
                             break
                     if not found:
@@ -539,6 +542,7 @@ class MappingView(ttk.Frame):
                 
             for u in updates:
                 r = u["row"]
+                r["group"] = u["target"]
                 r["code"] = u["code"]
                 r["conf"] = 1.0
                 r["source"] = "MANUAL"
