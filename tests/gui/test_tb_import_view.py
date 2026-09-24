@@ -63,3 +63,16 @@ def test_tb_import_view_confirm_with_existing_tb(tk_root, mock_db):
     view = TBImportView(tk_root, mock_db, on_complete=complete_cb)
     view._confirm()
     complete_cb.assert_called_once()
+
+def test_tb_import_view_loads_existing_tb_with_sqlite_rows(tk_root, tmp_path):
+    import sqlite3
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute("CREATE TABLE raw_tb (id INTEGER, ledger_name TEXT, group_name TEXT, cy_debit REAL, cy_credit REAL, cy_net REAL, py_net REAL, source TEXT)")
+    con.execute("INSERT INTO raw_tb VALUES (1, 'Cash', 'Asset', 100.0, 0.0, 100.0, 0.0, 'DB')")
+    mock_db = MagicMock()
+    mock_db.get_raw_tb.return_value = con.execute("SELECT * FROM raw_tb").fetchall()
+    view = TBImportView(tk_root, mock_db)
+    assert "1 ledger(s) in database" in view._count_var.get()
+    con.close()
+
