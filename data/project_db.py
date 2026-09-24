@@ -473,6 +473,13 @@ class ProjectDB:
         ).fetchall()
         return {r[0]: (r[1], r[2]) for r in rows}
 
+    def clear_overrides(self, section: str = None):
+        with self._tx():
+            if section:
+                self._conn.execute("DELETE FROM fs_overrides WHERE section=?", (section,))
+            else:
+                self._conn.execute("DELETE FROM fs_overrides")
+
     # ── Notes ────────────────────────────────────────────────────────────
     def get_note_data(self, note_no: int) -> dict[int, dict]:
         rows = self._conn.execute(

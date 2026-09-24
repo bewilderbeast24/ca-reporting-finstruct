@@ -18,24 +18,33 @@ def _fmt(v: float | None) -> str:
 class FSViewer(ttk.Frame):
     def __init__(self, parent, doc: FSDocument, db,
                  on_proceed: callable = None,
+                 on_back: callable = None,
                  rebuild_cf: callable = None,
-                 is_small_company: bool = False):
+                 is_small_company: bool = False,
+                 on_edit_signatories: callable = None):
         super().__init__(parent)
         self._doc = doc
         self._db  = db
         self._on_proceed = on_proceed
+        self._on_back = on_back
         self._rebuild_cf = rebuild_cf
         self._is_small   = is_small_company
+        self._on_edit_signatories = on_edit_signatories
         self._grids: dict[str, EditableGrid] = {}
         self._nb: ttk.Notebook | None = None
         self._include_cf = tk.BooleanVar(value=True)
+        self._baseline = {
+            attr: [(ln.cy, ln.py) for ln in getattr(self._doc, attr, [])]
+            for attr in ("bs", "pl", "ie", "rp", "cf")
+        }
         self._build()
 
     def _build(self):
         top = ttk.Frame(self)
         top.pack(fill="x", padx=8, pady=6)
         label(top, "6.  Financial Statements", style="Sec.TLabel").pack(side="left")
-        secondary_btn(top, "Save Overrides", command=self._save_overrides).pack(side="left", padx=8)
+        primary_btn(top, "💾 Save Overrides", command=self._save_overrides).pack(side="left", padx=(8, 4))
+        secondary_btn(top, "🔄 Revert Overrides", command=self._revert_overrides).pack(side="left", padx=4)
 
         # Cash Flow toggle — visible for COMPANY/SEC8 with small-co note
         et = self._doc.entity_type
@@ -51,6 +60,7 @@ class FSViewer(ttk.Frame):
                 label(cf_frame, "(optional — small company)", style="Muted.TLabel").pack(side="left", padx=4)
 
         primary_btn(top, "→ Generate Notes  F10", command=self._go_notes).pack(side="right", padx=4)
+        secondary_btn(top, "← Back to Annexures", command=self._back).pack(side="right", padx=4)
 
         self._nb = ttk.Notebook(self)
         self._nb.pack(fill="both", expand=True, padx=8, pady=4)
@@ -164,6 +174,23 @@ class FSViewer(ttk.Frame):
         if self._on_proceed:
             self._on_proceed()
 
+    def _back(self):
+        if self._on_back:
+            self._on_back()
+
+    def _revert_overrides(self):
+        if not messagebox.askyesno("Revert Overrides", "Clear all saved manual overrides and restore calculated values?"):
+            return
+        if hasattr(self._db, "clear_overrides"):
+            self._db.clear_overrides()
+        for attr, baseline_vals in self._baseline.items():
+            lines = getattr(self._doc, attr, [])
+            for ln, (orig_cy, orig_py) in zip(lines, baseline_vals):
+                ln.cy = orig_cy
+                ln.py = orig_py
+        self._populate_tabs()
+        messagebox.showinfo("Reverted", "All overrides cleared and restored to calculated values.")
+
     def _build_signatory_panel(self):
         """Collapsible signatory summary panel at the bottom of the viewer."""
         self._sig_visible = tk.BooleanVar(value=False)
@@ -217,5 +244,8 @@ class FSViewer(ttk.Frame):
                       foreground="#C50F1F").pack(padx=8, pady=4)
 
     def _edit_signatories(self):
-        messagebox.showinfo("Edit Signatories",
-                            "Go to Step 1 (Entity Setup) to update signatory details.")
+        if self._on_edit_signatories:
+            self._on_edit_signatories()
+        else:
+            messagebox.showinfo("Edit Signatories",
+                                "Go to Step 1 (Entity Setup) to update signatory details.")

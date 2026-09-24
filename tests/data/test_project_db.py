@@ -235,6 +235,13 @@ def test_fs_overrides_operations(project_db):
     
     assert len(project_db.get_overrides("PL")) == 0
 
+    project_db.clear_overrides("BS")
+    assert len(project_db.get_overrides("BS")) == 0
+
+    project_db.set_override("PL", "REV", 100, 80)
+    project_db.clear_overrides()
+    assert len(project_db.get_overrides("PL")) == 0
+
 def test_note_data_operations(project_db):
     project_db.save_note_line(1, 1, "Authorised Capital", 10000, 10000)
     project_db.save_note_line(1, 2, "Issued Capital", 5000, 5000, "SUB_TOTAL")
