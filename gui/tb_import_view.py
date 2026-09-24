@@ -118,13 +118,40 @@ class ColumnMappingDialog(tk.Toplevel):
 
 
 class TBImportView(ttk.Frame):
-    def __init__(self, parent, db, on_complete: callable = None):
+    def __init__(self, parent, db, on_complete: callable = None, on_back: callable = None):
         super().__init__(parent)
         self._db          = db
         self._on_complete = on_complete
+        self._on_back     = on_back
         self._import_result = None
         self._path: Path | None = None
         self._build()
+        self._load_existing_tb()
+
+    def _load_existing_tb(self):
+        raw_rows = self._db.get_raw_tb()
+        if not raw_rows:
+            return
+        grid_rows = []
+        for i, row in enumerate(raw_rows):
+            cy_dr = f"{row['cy_debit']:,.2f}" if row.get("cy_debit") else "—"
+            cy_cr = f"{row['cy_credit']:,.2f}" if row.get("cy_credit") else "—"
+            cy_net = f"{row['cy_net']:,.2f}" if row.get("cy_net") else "—"
+            py_net = f"{row['py_net']:,.2f}" if row.get("py_net") else "—"
+            grid_rows.append({
+                "iid": str(row.get("id", i)),
+                "tag": "alt" if i % 2 else "",
+                "values": [
+                    row.get("ledger_name", ""),
+                    row.get("group_name", "") or "",
+                    cy_dr, cy_cr, cy_net, py_net,
+                    row.get("source", "DB"),
+                ],
+            })
+        self._grid.load_rows(grid_rows)
+        n = len(raw_rows)
+        self._count_var.set(f"{n} ledger(s) in database")
+        self._status_var.set(f"Showing {n} previously imported ledger(s). Browse a file to replace, or proceed to Mapping.")
 
     def _build(self):
         top = ttk.Frame(self)
@@ -138,7 +165,7 @@ class TBImportView(ttk.Frame):
         secondary_btn(tmpl, "📥  Download TB Template for this entity",
                       command=self._download_template).pack(side="left", padx=4)
         label(tmpl, "Fill in Excel, then import back here.",
-              style="Muted.TLabel").pack(side="left", padx=6)
+               style="Muted.TLabel").pack(side="left", padx=6)
         secondary_btn(tmpl, "🔗  Connect Zoho Books",
                       command=self._zoho_connect).pack(side="right", padx=4)
 
@@ -179,11 +206,16 @@ class TBImportView(ttk.Frame):
         # Bottom bar
         bot = ttk.Frame(self)
         bot.pack(fill="x", padx=8, pady=6)
+        secondary_btn(bot, "← Back to Entity Setup", command=self._back).pack(side="left")
         self._count_var = tk.StringVar(value="")
         ttk.Label(bot, textvariable=self._count_var,
-                  style="Muted.TLabel").pack(side="left")
+                  style="Muted.TLabel").pack(side="left", padx=12)
         primary_btn(bot, "✔ Confirm & Proceed  →", command=self._confirm).pack(side="right")
-        secondary_btn(bot, "Clear / Re-import", command=self._clear).pack(side="right", padx=6)
+        secondary_btn(bot, "Clear Preview", command=self._clear).pack(side="right", padx=6)
+
+    def _back(self):
+        if self._on_back:
+            self._on_back()
 
     def _download_template(self):
         entity_type = "COMPANY"
@@ -237,6 +269,7 @@ class TBImportView(ttk.Frame):
         if path:
             self._path_var.set(path)
             self._path = Path(path)
+            self._status_var.set(f"Selected '{self._path.name}'. Click 'Import' to preview or 'Confirm & Proceed'.")
 
     def _do_import(self):
         if not self._path or not self._path.exists():
@@ -354,8 +387,16 @@ class TBImportView(ttk.Frame):
 
     def _confirm(self):
         if not self._import_result or not self._import_result.rows:
-            messagebox.showerror("No Data", "No data to import. Please import a file first.")
-            return
+            if self._path and self._path.exists():
+                self._do_import()
+            if not self._import_result or not self._import_result.rows:
+                raw_rows = self._db.get_raw_tb()
+                if raw_rows:
+                    if self._on_complete:
+                        self._on_complete()
+                    return
+                messagebox.showerror("No Data", "No data to import. Please import a file first.")
+                return
         if self._import_result.errors:
             if not messagebox.askyesno("Errors", "Import has errors. Proceed anyway?"):
                 return
