@@ -12,11 +12,73 @@ from gui.theme import primary_btn, secondary_btn, label
 from gui.fs_grid_view import EditableGrid
 
 
-class PPEView(ttk.Frame):
-    def __init__(self, parent, db, on_dep_posted: callable = None):
+class AddAssetDialog(tk.Toplevel):
+    def __init__(self, parent, on_add: callable):
         super().__init__(parent)
-        self._db          = db
+        self._on_add = on_add
+        self.title("Add New Asset")
+        self.geometry("440x260")
+        self.resizable(False, False)
+        self.grab_set()
+        self.configure(bg=T["bg"])
+        self._build()
+
+    def _build(self):
+        g = ttk.Frame(self, padding=16)
+        g.pack(fill="both", expand=True)
+        g.columnconfigure(1, weight=1)
+
+        self._name_var = tk.StringVar(value="New Asset")
+        self._cat_var  = tk.StringVar(value=PPE_CATEGORIES[0])
+        self._method_var = tk.StringVar(value="SLM")
+        self._life_var = tk.StringVar(value="10")
+        self._gross_var = tk.StringVar(value="0.0")
+
+        def row(r, lbl, widget):
+            ttk.Label(g, text=lbl).grid(row=r, column=0, sticky="w", pady=4, padx=4)
+            widget.grid(row=r, column=1, sticky="ew", pady=4, padx=4)
+
+        row(0, "Asset Description *", ttk.Entry(g, textvariable=self._name_var, width=28))
+        row(1, "Category", ttk.Combobox(g, textvariable=self._cat_var, values=PPE_CATEGORIES, state="readonly", width=26))
+        row(2, "Method", ttk.Combobox(g, textvariable=self._method_var, values=["SLM", "WDV"], state="readonly", width=12))
+        row(3, "Useful Life (Yrs)", ttk.Entry(g, textvariable=self._life_var, width=12))
+        row(4, "Gross Block Op (₹)", ttk.Entry(g, textvariable=self._gross_var, width=16))
+
+        btn = ttk.Frame(g)
+        btn.grid(row=5, column=0, columnspan=2, pady=12)
+        primary_btn(btn, "Add Asset", command=self._save).pack(side="left", padx=8)
+        secondary_btn(btn, "Cancel", command=self.destroy).pack(side="left")
+
+    def _save(self):
+        name = self._name_var.get().strip()
+        if not name:
+            messagebox.showerror("Error", "Asset description is required.")
+            return
+        try:
+            life = int(self._life_var.get().strip() or 10)
+            gross = float(self._gross_var.get().strip().replace(",", "") or 0)
+        except ValueError:
+            messagebox.showerror("Error", "Life and Gross Block must be numeric.")
+            return
+        new_asset = {
+            "asset_name": name,
+            "category": self._cat_var.get(),
+            "method": self._method_var.get(),
+            "useful_life_yrs": life,
+            "gross_op": gross,
+        }
+        self.destroy()
+        self._on_add(new_asset)
+
+
+class PPEView(ttk.Frame):
+    def __init__(self, parent, db, on_dep_posted: callable = None,
+                 on_proceed: callable = None, on_back: callable = None):
+        super().__init__(parent)
+        self._db            = db
         self._on_dep_posted = on_dep_posted
+        self._on_proceed    = on_proceed
+        self._on_back       = on_back
         self._build()
         self._load()
 
@@ -24,11 +86,27 @@ class PPEView(ttk.Frame):
         top = ttk.Frame(self)
         top.pack(fill="x", padx=8, pady=6)
         label(top, "5.  PPE / Fixed Asset Register", style="Sec.TLabel").pack(side="left")
-        primary_btn(top, "+ Add Asset", command=self._add_asset).pack(side="left", padx=8)
-        secondary_btn(top, "📥  Import from Excel", command=self._import_ppe).pack(side="left", padx=4)
+
+        # Excel I/O group
         secondary_btn(top, "📥  Download Template", command=self._download_template).pack(side="left", padx=4)
-        secondary_btn(top, "Post Depreciation to WTB", command=self._post_dep).pack(side="left", padx=4)
-        secondary_btn(top, "Delete Selected", command=self._delete_asset).pack(side="left", padx=4)
+        secondary_btn(top, "📥  Import from Excel", command=self._import_ppe).pack(side="left", padx=4)
+
+        # Separator
+        ttk.Separator(top, orient="vertical").pack(side="left", fill="y", padx=8)
+
+        # Asset operations
+        primary_btn(top, "+ Add Asset", command=self._add_asset).pack(side="left", padx=4)
+        secondary_btn(top, "🗑 Delete Selected", command=self._delete_asset).pack(side="left", padx=4)
+
+        # Separator
+        ttk.Separator(top, orient="vertical").pack(side="left", fill="y", padx=8)
+
+        # Posting action
+        secondary_btn(top, "⚡ Post Depreciation to WTB", command=self._post_dep).pack(side="left", padx=4)
+
+        # Navigation
+        primary_btn(top, "Proceed to Annexures →", command=self._proceed).pack(side="right", padx=4)
+        secondary_btn(top, "← Back to WTB", command=self._back).pack(side="right", padx=4)
 
         cols = [
             ("asset",    "Asset Description",   200, "w"),
@@ -58,6 +136,14 @@ class PPEView(ttk.Frame):
         self._tot_var = tk.StringVar(value="")
         ttk.Label(self, textvariable=self._tot_var,
                   style="Muted.TLabel").pack(fill="x", padx=8, pady=2)
+
+    def _proceed(self):
+        if self._on_proceed:
+            self._on_proceed()
+
+    def _back(self):
+        if self._on_back:
+            self._on_back()
 
     def _load(self):
         rows_db = self._db.get_ppe()
@@ -94,10 +180,11 @@ class PPEView(ttk.Frame):
         )
 
     def _add_asset(self):
-        new = {"asset_name": "New Asset", "category": PPE_CATEGORIES[0],
-               "method": "SLM", "useful_life_yrs": 10}
-        self._db.upsert_ppe(new)
-        self._load()
+        def do_add(new_asset):
+            r = recalc_asset(new_asset)
+            self._db.upsert_ppe(r)
+            self._load()
+        AddAssetDialog(self, do_add)
 
     def _delete_asset(self):
         iid = self._grid.get_selected_iid()
