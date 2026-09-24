@@ -34,3 +34,48 @@ def test_validate_balance(mock_lookup):
     res = validate_balance(totals, "COMPANY")
     assert res.ok is True
     assert res.balance_diff_cy == 0.0
+
+
+def test_build_wtb_lines_with_sqlite_rows():
+    import sqlite3
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute("""
+        CREATE TABLE raw_tb (
+            id INTEGER PRIMARY KEY, ledger_name TEXT, group_name TEXT,
+            cy_debit REAL, cy_credit REAL, cy_net REAL, py_net REAL, source TEXT
+        )
+    """)
+    con.execute("""
+        CREATE TABLE wtb (
+            id INTEGER PRIMARY KEY, raw_tb_id INTEGER, mapping_code TEXT,
+            confidence REAL, confidence_source TEXT, cy_net REAL, py_net REAL, is_confirmed INTEGER
+        )
+    """)
+    con.execute("INSERT INTO raw_tb VALUES (1, 'Equity Capital', 'Capital', 0, 1000, -1000, -1000, 'EXCEL')")
+    con.execute("INSERT INTO wtb VALUES (10, 1, 'CO_EL001', 1.0, 'MANUAL', -1000, -1000, 1)")
+    
+    raw_rows = con.execute("SELECT * FROM raw_tb").fetchall()
+    wtb_rows = con.execute("SELECT * FROM wtb").fetchall()
+    
+    lines = build_wtb_lines(wtb_rows, raw_rows)
+    assert len(lines) == 1
+    assert lines[0].ledger_name == "Equity Capital"
+    assert lines[0].group_name == "Capital"
+    assert lines[0].mapping_code == "CO_EL001"
+    assert lines[0].entry is not None
+    assert lines[0].entry.group == "Shareholders Funds"
+
+
+def test_build_wtb_lines_unmapped_preserved():
+    raw_rows = [
+        {"id": 1, "ledger_name": "Unmapped Cash", "group_name": "Cash", "cy_net": 500, "py_net": 400}
+    ]
+    wtb_rows = []
+    lines = build_wtb_lines(wtb_rows, raw_rows)
+    assert len(lines) == 1
+    assert lines[0].ledger_name == "Unmapped Cash"
+    assert lines[0].group_name == "Cash"
+    assert lines[0].mapping_code == ""
+    assert lines[0].cy_net == 500.0
+
