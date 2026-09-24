@@ -111,3 +111,40 @@ def test_wtb_view_load_with_sqlite_rows(mock_val, mock_agg, mock_build, tk_root)
     assert "5,000.00" in vals[3]
     assert vals[5] == "Prepaid rent adjust"
 
+
+def test_wtb_view_displays_mapped_trial_balance(tk_root):
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute("""
+        CREATE TABLE raw_tb (
+            id INTEGER PRIMARY KEY, ledger_name TEXT, group_name TEXT,
+            cy_debit REAL, cy_credit REAL, cy_net REAL, py_net REAL, source TEXT
+        )
+    """)
+    con.execute("""
+        CREATE TABLE wtb (
+            id INTEGER PRIMARY KEY, raw_tb_id INTEGER, mapping_code TEXT,
+            confidence REAL, confidence_source TEXT, cy_net REAL, py_net REAL, is_confirmed INTEGER
+        )
+    """)
+    con.execute("INSERT INTO raw_tb VALUES (1, 'Equity Capital', 'Share Capital', 0, 50000, -50000, -50000, 'EXCEL')")
+    con.execute("INSERT INTO wtb VALUES (10, 1, 'CO_EL001', 1.0, 'MANUAL', -50000, -50000, 1)")
+
+    db = MagicMock()
+    db.get_wtb.return_value = con.execute("SELECT * FROM wtb").fetchall()
+    db.get_raw_tb.return_value = con.execute("SELECT * FROM raw_tb").fetchall()
+    db.get_adjustments.return_value = []
+    db.get_meta.return_value = "COMPANY"
+
+    view = WTBView(tk_root, db)
+    rows = view._grid.get_all_rows()
+    assert len(rows) == 1
+    # Check [group, heading, ledger_name, mapping_code, cy_s, py_s, fs_tag]
+    assert rows[0][0] == "Shareholders Funds"
+    assert rows[0][1] == "Share Capital"
+    assert rows[0][2] == "Equity Capital"
+    assert rows[0][3] == "CO_EL001"
+    assert "-50,000.00" in rows[0][4]
+    assert rows[0][6] == "BS"
+
+
