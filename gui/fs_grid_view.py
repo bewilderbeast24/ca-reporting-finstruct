@@ -41,10 +41,16 @@ class EditableGrid(ttk.Frame):
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
 
-        for cid, hdr, width, anchor in columns:
+        for col in columns:
+            cid = col[0]
+            hdr = col[1]
+            width = col[2]
+            anchor = col[3] if len(col) > 3 else "w"
+            minwidth = col[4] if len(col) > 4 else 20
+            stretch = col[5] if len(col) > 5 else (cid == columns[0][0])
             self._tree.heading(cid, text=hdr,
                                command=lambda c=cid: self._sort_col(c))
-            self._tree.column(cid, width=width, anchor=anchor, stretch=(cid == columns[0][0]))
+            self._tree.column(cid, width=width, minwidth=minwidth, anchor=anchor, stretch=stretch)
 
         # Row colour tags
         self._tree.tag_configure("section",  background=T["section_bg"],
