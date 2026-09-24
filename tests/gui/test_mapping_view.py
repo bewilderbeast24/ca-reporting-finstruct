@@ -86,7 +86,8 @@ def test_mapping_view_column_widths_and_fixed_layout(mock_tree, mock_lookup, tk_
         info = tree.column(col_id)
         assert info["stretch"] == 0, f"Column {col_id} should not stretch"
         assert info["minwidth"] > 20, f"Column {col_id} should have a meaningful minwidth"
-    assert tree.column("mapped")["width"] >= 350
+    assert tree.column("group")["width"] >= 300
+    assert tree.column("mapped")["width"] >= 140
 
 
 def test_mapping_view_override_autopopulate_from_tb_group(tk_root, mock_db, mock_sdb):
@@ -176,9 +177,15 @@ def test_mapping_view_apply_override(tk_root, mock_db, mock_sdb):
 
     view._apply_override()
     assert view._rows[0]["code"] == "CO_EL001"
+    assert view._rows[0]["group"] == "Shareholders Funds > Share Capital > Equity Share Capital"
     assert view._rows[0]["conf"] == 1.0
     assert view._rows[0]["source"] == "MANUAL"
     assert view._rows[0]["confirmed"] is True
     mock_db.upsert_wtb.assert_called()
+
+    # Verify grid displays code word in Mapped Head and full hierarchy in TB Group
+    all_rows = view._grid.get_all_rows()
+    assert all_rows[0][1] == "Shareholders Funds > Share Capital > Equity Share Capital"
+    assert all_rows[0][2] == "CO_EL001"
 
 
