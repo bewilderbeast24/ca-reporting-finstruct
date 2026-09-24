@@ -414,6 +414,14 @@ class ProjectDB:
                 "DELETE FROM adjustments WHERE adj_id LIKE 'DEP-%'"
             )
 
+    def delete_adjustment(self, adj_db_id):
+        """Delete an adjustment entry by its database id or adj_id."""
+        with self._tx():
+            if isinstance(adj_db_id, int) or str(adj_db_id).isdigit():
+                self._conn.execute("DELETE FROM adjustments WHERE id=?", (int(adj_db_id),))
+            else:
+                self._conn.execute("DELETE FROM adjustments WHERE adj_id=?", (str(adj_db_id),))
+
     # ── PPE ──────────────────────────────────────────────────────────────
     def upsert_ppe(self, asset: dict):
         with self._tx():

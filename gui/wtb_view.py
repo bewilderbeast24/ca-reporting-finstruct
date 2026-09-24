@@ -10,10 +10,11 @@ from gui.fs_grid_view import EditableGrid
 
 
 class WTBView(ttk.Frame):
-    def __init__(self, parent, db, on_proceed: callable = None):
+    def __init__(self, parent, db, on_proceed: callable = None, on_back: callable = None):
         super().__init__(parent)
         self._db = db
         self._on_proceed = on_proceed
+        self._on_back = on_back
         self._build()
         self._load()
 
@@ -21,9 +22,10 @@ class WTBView(ttk.Frame):
         top = ttk.Frame(self)
         top.pack(fill="x", padx=8, pady=6)
         label(top, "4.  Working Trial Balance / Mapped TB", style="Sec.TLabel").pack(side="left")
-        secondary_btn(top, "Add Adjustment Entry", command=self._add_adj).pack(side="left", padx=8)
+        
         primary_btn(top, "✔ Proceed to PPE →", command=self._proceed).pack(side="right", padx=4)
-        primary_btn(top, "Validate F9", command=self._validate).pack(side="right", padx=4)
+        secondary_btn(top, "Validate F9", command=self._validate).pack(side="right", padx=4)
+        secondary_btn(top, "← Back to Mapping", command=self._back).pack(side="right", padx=4)
 
         self._status_var = tk.StringVar(value="")
         ttk.Label(self, textvariable=self._status_var,
@@ -46,9 +48,31 @@ class WTBView(ttk.Frame):
         # Adjustment entries sub-view
         adj_frame = ttk.LabelFrame(self, text="Adjustment Entries")
         adj_frame.pack(fill="x", padx=8, pady=4)
-        self._adj_list = tk.Text(adj_frame, height=4, state="disabled",
-                                 bg=T["bg_white"], font=(T["font"], 9), relief="flat")
-        self._adj_list.pack(fill="x", padx=4, pady=4)
+
+        adj_top = ttk.Frame(adj_frame)
+        adj_top.pack(fill="x", padx=6, pady=2)
+        secondary_btn(adj_top, "➕ Add Adjustment Entry", command=self._add_adj).pack(side="left", padx=2)
+        secondary_btn(adj_top, "🗑 Delete Selected Entry", command=self._delete_adj).pack(side="left", padx=4)
+
+        tree_frame = ttk.Frame(adj_frame)
+        tree_frame.pack(fill="x", expand=True, padx=6, pady=4)
+
+        adj_cols = [
+            ("id", "Entry ID", 110, "w"),
+            ("ledger", "Ledger Name", 200, "w"),
+            ("code", "Code", 70, "center"),
+            ("dr", "Debit (₹)", 100, "e"),
+            ("cr", "Credit (₹)", 100, "e"),
+            ("narration", "Narration", 260, "w"),
+        ]
+        self._adj_tree = ttk.Treeview(tree_frame, columns=[c[0] for c in adj_cols], show="headings", height=4)
+        for cid, chdr, cw, ca in adj_cols:
+            self._adj_tree.heading(cid, text=chdr)
+            self._adj_tree.column(cid, width=cw, anchor=ca)
+        adj_vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self._adj_tree.yview)
+        self._adj_tree.configure(yscrollcommand=adj_vsb.set)
+        self._adj_tree.pack(side="left", fill="x", expand=True)
+        adj_vsb.pack(side="left", fill="y")
 
     def _load(self):
         try:
@@ -59,10 +83,8 @@ class WTBView(ttk.Frame):
             if not raw_rows:
                 self._grid.load_rows([])
                 self._status_var.set("⚠ No Trial Balance data found. Please import TB first (Step 2).")
-                self._adj_list.configure(state="normal")
-                self._adj_list.delete("1.0", "end")
-                self._adj_list.insert("end", "(No adjustments)")
-                self._adj_list.configure(state="disabled")
+                for item in self._adj_tree.get_children():
+                    self._adj_tree.delete(item)
                 return
 
             lines    = build_wtb_lines(wtb_rows, raw_rows)
@@ -85,16 +107,17 @@ class WTBView(ttk.Frame):
                 })
             self._grid.load_rows(grid_rows)
 
-            # Show adjustments
+            # Show adjustments in treeview
+            for item in self._adj_tree.get_children():
+                self._adj_tree.delete(item)
             adjs = self._db.get_adjustments()
-            self._adj_list.configure(state="normal")
-            self._adj_list.delete("1.0", "end")
             for a in adjs:
-                dr = f"Dr ₹{a['dr_amount']:,.2f}" if a["dr_amount"] else ""
-                cr = f"Cr ₹{a['cr_amount']:,.2f}" if a["cr_amount"] else ""
-                self._adj_list.insert("end",
-                    f"{a['adj_id']}  |  {a['ledger_name']}  |  {dr}{cr}  |  {a['narration']}\n")
-            self._adj_list.configure(state="disabled")
+                dr = f"{a['dr_amount']:,.2f}" if a["dr_amount"] else "—"
+                cr = f"{a['cr_amount']:,.2f}" if a["cr_amount"] else "—"
+                self._adj_tree.insert("", "end", iid=str(a["id"]), values=(
+                    a["adj_id"], a["ledger_name"], a.get("mapping_code", "") or "",
+                    dr, cr, a.get("narration", "") or ""
+                ))
 
             # Balance
             totals = aggregate_by_code(lines)
@@ -128,9 +151,23 @@ class WTBView(ttk.Frame):
     def _add_adj(self):
         AdjDialog(self, self._db, on_save=self._load)
 
+    def _delete_adj(self):
+        sel = self._adj_tree.selection()
+        if not sel:
+            messagebox.showinfo("Select", "Select an adjustment entry to delete.")
+            return
+        adj_db_id = sel[0]
+        if messagebox.askyesno("Delete", "Delete selected adjustment entry?"):
+            self._db.delete_adjustment(adj_db_id)
+            self._load()
+
     def _proceed(self):
         if self._on_proceed:
             self._on_proceed()
+
+    def _back(self):
+        if self._on_back:
+            self._on_back()
 
 
 class AdjDialog(tk.Toplevel):
@@ -139,7 +176,7 @@ class AdjDialog(tk.Toplevel):
         self._db = db
         self._on_save = on_save
         self.title("Add Adjustment Entry")
-        self.geometry("480x320")
+        self.geometry("520x350")
         self.grab_set()
         self.configure(bg=T["bg"])
         self._build()
@@ -148,23 +185,32 @@ class AdjDialog(tk.Toplevel):
         g = ttk.Frame(self, padding=16)
         g.pack(fill="both", expand=True)
         g.columnconfigure(1, weight=1)
+
+        from core.master_db import get_lookup_map
+        lm = get_lookup_map()
+        code_choices = [f"{c} — {e.lookup_name}" for c, e in sorted(lm.items())]
+
         fields = [
-            ("adj_id",    "Entry ID (auto)"),
-            ("ledger",    "Ledger Name"),
-            ("code",      "Mapping Code"),
-            ("dr",        "Debit Amount (₹)"),
-            ("cr",        "Credit Amount (₹)"),
-            ("narration", "Narration"),
+            ("adj_id",    "Entry ID (auto)", False),
+            ("ledger",    "Ledger Name",      False),
+            ("code",      "Mapping Code",     True),
+            ("dr",        "Debit Amount (₹)",  False),
+            ("cr",        "Credit Amount (₹)", False),
+            ("narration", "Narration",         False),
         ]
         self._vars: dict[str, tk.StringVar] = {}
         import datetime
         adj_id = f"AJE-{datetime.datetime.now().strftime('%d%m%H%M')}"
-        for i, (k, lbl) in enumerate(fields):
+        for i, (k, lbl, is_combo) in enumerate(fields):
             ttk.Label(g, text=lbl).grid(row=i, column=0, sticky="w", pady=4, padx=4)
             var = tk.StringVar(value=adj_id if k == "adj_id" else "")
             self._vars[k] = var
-            ttk.Entry(g, textvariable=var, width=36).grid(
-                row=i, column=1, sticky="ew", pady=4, padx=4)
+            if is_combo:
+                cb = ttk.Combobox(g, textvariable=var, values=code_choices, width=34)
+                cb.grid(row=i, column=1, sticky="ew", pady=4, padx=4)
+            else:
+                ttk.Entry(g, textvariable=var, width=36).grid(
+                    row=i, column=1, sticky="ew", pady=4, padx=4)
 
         btn = ttk.Frame(g)
         btn.grid(row=len(fields), column=0, columnspan=2, pady=12)
@@ -175,12 +221,13 @@ class AdjDialog(tk.Toplevel):
         v = {k: var.get().strip() for k, var in self._vars.items()}
         if not v["ledger"] or not v["code"]:
             messagebox.showerror("Error", "Ledger and Code are required."); return
+        code = v["code"].split(" — ")[0].strip()
         try:
             dr = float(v["dr"] or 0)
             cr = float(v["cr"] or 0)
         except ValueError:
             messagebox.showerror("Error", "Dr/Cr must be numeric."); return
-        self._db.add_adjustment(v["adj_id"], v["ledger"], v["code"],
+        self._db.add_adjustment(v["adj_id"], v["ledger"], code,
                                 dr, cr, v["narration"])
         self.destroy()
         if self._on_save:
