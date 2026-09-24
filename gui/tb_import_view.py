@@ -129,23 +129,29 @@ class TBImportView(ttk.Frame):
         self._load_existing_tb()
 
     def _load_existing_tb(self):
-        raw_rows = self._db.get_raw_tb()
+        if not self._db:
+            return
+        try:
+            raw_rows = self._db.get_raw_tb()
+        except Exception:
+            return
         if not raw_rows:
             return
         grid_rows = []
         for i, row in enumerate(raw_rows):
-            cy_dr = f"{row['cy_debit']:,.2f}" if row.get("cy_debit") else "—"
-            cy_cr = f"{row['cy_credit']:,.2f}" if row.get("cy_credit") else "—"
-            cy_net = f"{row['cy_net']:,.2f}" if row.get("cy_net") else "—"
-            py_net = f"{row['py_net']:,.2f}" if row.get("py_net") else "—"
+            r = dict(row) if hasattr(row, "keys") else row
+            cy_dr = f"{r['cy_debit']:,.2f}" if r.get("cy_debit") else "—"
+            cy_cr = f"{r['cy_credit']:,.2f}" if r.get("cy_credit") else "—"
+            cy_net = f"{r['cy_net']:,.2f}" if r.get("cy_net") else "—"
+            py_net = f"{r['py_net']:,.2f}" if r.get("py_net") else "—"
             grid_rows.append({
-                "iid": str(row.get("id", i)),
+                "iid": str(r.get("id", i)),
                 "tag": "alt" if i % 2 else "",
                 "values": [
-                    row.get("ledger_name", ""),
-                    row.get("group_name", "") or "",
+                    r.get("ledger_name", ""),
+                    r.get("group_name", "") or "",
                     cy_dr, cy_cr, cy_net, py_net,
-                    row.get("source", "DB"),
+                    r.get("source", "DB"),
                 ],
             })
         self._grid.load_rows(grid_rows)
