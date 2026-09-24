@@ -111,11 +111,12 @@ class WTBView(ttk.Frame):
             for item in self._adj_tree.get_children():
                 self._adj_tree.delete(item)
             adjs = self._db.get_adjustments()
-            for a in adjs:
-                dr = f"{a['dr_amount']:,.2f}" if a["dr_amount"] else "—"
-                cr = f"{a['cr_amount']:,.2f}" if a["cr_amount"] else "—"
-                self._adj_tree.insert("", "end", iid=str(a["id"]), values=(
-                    a["adj_id"], a["ledger_name"], a.get("mapping_code", "") or "",
+            for row in adjs:
+                a = dict(row) if hasattr(row, "keys") else row
+                dr = f"{a['dr_amount']:,.2f}" if a.get("dr_amount") else "—"
+                cr = f"{a['cr_amount']:,.2f}" if a.get("cr_amount") else "—"
+                self._adj_tree.insert("", "end", iid=str(a.get("id", "")), values=(
+                    a.get("adj_id", ""), a.get("ledger_name", ""), a.get("mapping_code", "") or "",
                     dr, cr, a.get("narration", "") or ""
                 ))
 
