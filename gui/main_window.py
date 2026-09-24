@@ -308,7 +308,8 @@ class MainWindow:
         self._highlight_step(0)
         from gui.company_master import CompanyMasterForm
         f = CompanyMasterForm(self._content, self._db,
-                              on_save=lambda _: self._status_var.set("Entity master saved."))
+                              on_save=lambda _: self._status_var.set("Entity master saved."),
+                              on_proceed=lambda: self._go_step(1))
         f.pack(fill="both", expand=True)
 
     def _show_tb_import(self):
@@ -316,7 +317,8 @@ class MainWindow:
         self._highlight_step(1)
         from gui.tb_import_view import TBImportView
         f = TBImportView(self._content, self._db,
-                         on_complete=lambda: self._go_step(2))
+                         on_complete=lambda: self._go_step(2),
+                         on_back=lambda: self._go_step(0))
         f.pack(fill="both", expand=True)
 
     def _show_mapping(self):
@@ -325,7 +327,8 @@ class MainWindow:
         from gui.mapping_view import MappingView
         et = self._db.get_meta("entity_type") or "COMPANY"
         f  = MappingView(self._content, self._db, self._sdb, et,
-                         on_complete=lambda: self._go_step(3))
+                         on_complete=lambda: self._go_step(3),
+                         on_back=lambda: self._go_step(1))
         f.pack(fill="both", expand=True)
 
     def _show_wtb(self):
@@ -333,7 +336,8 @@ class MainWindow:
         self._highlight_step(3)
         from gui.wtb_view import WTBView
         f = WTBView(self._content, self._db,
-                    on_proceed=lambda: self._go_step(4))
+                    on_proceed=lambda: self._go_step(4),
+                    on_back=lambda: self._go_step(2))
         f.pack(fill="both", expand=True)
 
     def _show_ppe(self):
@@ -341,14 +345,18 @@ class MainWindow:
         self._highlight_step(4)
         from gui.ppe_view import PPEView
         f = PPEView(self._content, self._db,
-                    on_dep_posted=lambda _: self._status_var.set("Depreciation posted."))
+                    on_dep_posted=lambda _: self._status_var.set("Depreciation posted."),
+                    on_proceed=lambda: self._go_step(5),
+                    on_back=lambda: self._go_step(3))
         f.pack(fill="both", expand=True)
 
     def _show_annexures(self):
         self._clear_content()
         self._highlight_step(5)
         from gui.annexures_view import AnnexuresView
-        f = AnnexuresView(self._content, self._db, self._sdb)
+        f = AnnexuresView(self._content, self._db, self._sdb,
+                          on_proceed=lambda: self._go_step(6),
+                          on_back=lambda: self._go_step(4))
         f.pack(fill="both", expand=True)
         self._status_var.set("Custom Annexures — fill buckets, tie out to TB.")
 
@@ -378,8 +386,10 @@ class MainWindow:
         from gui.fs_viewer import FSViewer
         f = FSViewer(self._content, doc, self._db,
                      on_proceed=lambda: self._go_notes(),
+                     on_back=lambda: self._go_step(5),
                      rebuild_cf=_rebuild_cf,
-                     is_small_company=small)
+                     is_small_company=small,
+                     on_edit_signatories=lambda: self._go_step(0))
         f.pack(fill="both", expand=True)
         self._status_var.set("Financial Statements generated.")
 
@@ -419,7 +429,9 @@ class MainWindow:
         from core.notes_engine import NotesEngine
         ne    = NotesEngine(totals, et, ppe_data, div, em)
         notes, _ = ne.generate_dynamic(doc)
-        f = NotesView(self._content, notes, self._db)
+        f = NotesView(self._content, notes, self._db,
+                      on_proceed=lambda: self._go_step(8),
+                      on_back=lambda: self._go_step(6))
         f.pack(fill="both", expand=True)
         self._status_var.set(f"Notes generated ({len(notes)} notes, auto-numbered).")
 
@@ -455,11 +467,15 @@ class MainWindow:
         from gui.report_editor import ReportEditor
         self._report_texts = {}
         if show_directors:
-            dr = ReportEditor(nb, self._db, "directors")
+            dr = ReportEditor(nb, self._db, "directors",
+                              on_proceed=lambda: self._export(),
+                              on_back=lambda: self._go_step(7))
             nb.add(dr, text="Directors' Report")
             self._report_texts["directors_editor"] = dr
         if show_audit:
-            ar = ReportEditor(nb, self._db, "audit")
+            ar = ReportEditor(nb, self._db, "audit",
+                              on_proceed=lambda: self._export(),
+                              on_back=lambda: self._go_step(7))
             nb.add(ar, text="Independent Auditor's Report")
             self._report_texts["audit_editor"] = ar
 

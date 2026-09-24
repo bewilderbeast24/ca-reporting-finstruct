@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 import tkinter as tk
+from tkinter import ttk
 from gui.export_dialog import ExportDialog
 
 @pytest.fixture
@@ -41,3 +42,29 @@ def test_export_dialog_export_validation(mock_msg, tk_root, mock_db):
     dialog._export()
     mock_msg.showinfo.assert_called_once()
     assert "Select at least one format" in mock_msg.showinfo.call_args[0][1]
+
+
+@patch('gui.export_dialog.messagebox')
+def test_export_dialog_on_export_success(mock_msg, tk_root, mock_db, tmp_path):
+    dialog = ExportDialog(tk_root, mock_db)
+    pdf_file = tmp_path / "test.pdf"
+    pdf_file.write_text("dummy")
+    xlsx_file = tmp_path / "test.xlsx"
+    xlsx_file.write_text("dummy")
+
+    dialog._on_export_success(tmp_path, pdf_file, xlsx_file, None)
+    assert hasattr(dialog, "_action_frame")
+    buttons = [w.cget("text") for w in dialog._action_frame.winfo_children() if isinstance(w, (ttk.Button, tk.Button))]
+    assert "📂 Open Output Folder" in buttons
+    assert "👁 Open PDF" in buttons
+    assert "📊 Open Excel" in buttons
+    mock_msg.showinfo.assert_called_once()
+
+
+@patch('os.startfile')
+def test_export_dialog_open_path_windows(mock_startfile, tk_root, mock_db, tmp_path):
+    dialog = ExportDialog(tk_root, mock_db)
+    with patch('platform.system', return_value="Windows"):
+        dialog._open_path(tmp_path)
+        mock_startfile.assert_called_once_with(str(tmp_path))
+

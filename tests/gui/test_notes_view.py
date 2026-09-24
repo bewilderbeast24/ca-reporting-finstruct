@@ -35,3 +35,36 @@ def test_notes_view_with_notes(tk_root, mock_db):
         view._save_all()
     mock_db._conn.execute.assert_called_once()
     mock_db._conn.commit.assert_called_once()
+
+
+def test_notes_view_navigation_and_pagination(tk_root, mock_db):
+    notes = [
+        Note(number=i, title=f"Note {i}", lines=[FSLine(label="Item", cy=10, py=9, note=None, indent=0, row_type="ITEM")])
+        for i in range(1, 15)
+    ]
+    proceed_called = False
+    back_called = False
+    def on_proceed():
+        nonlocal proceed_called
+        proceed_called = True
+    def on_back():
+        nonlocal back_called
+        back_called = True
+
+    view = NotesView(tk_root, notes, mock_db, on_proceed=on_proceed, on_back=on_back)
+    assert view._current_page == 0
+    view._next_page()
+    assert view._current_page == 1
+    view._prev_page()
+    assert view._current_page == 0
+
+    # Jump to note 12 (page 2)
+    view._jump_combo.current(11)
+    view._on_jump_selected()
+    assert view._current_page == 2
+
+    view._proceed()
+    assert proceed_called is True
+    view._back()
+    assert back_called is True
+
