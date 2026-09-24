@@ -1,6 +1,7 @@
 """ML Mapping Grid — ledger → ICAI head with confidence colours."""
 
 from __future__ import annotations
+import re
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
@@ -8,6 +9,12 @@ from config import THEME as T
 from core.mapper import Mapper, CONF_GREEN, CONF_YELLOW
 from core.master_db import get_group_tree, get_lookup_map
 from gui.theme import primary_btn, secondary_btn, label
+
+
+def _norm_str(s: str) -> str:
+    s = (s or "").lower().replace("\ufffd", "-").replace("\u2014", "-").replace("\u2013", "-")
+    s = re.sub(r"[\(\)\–\—/\,\'\"\:\;\.\?\!\_\-]+", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
 
 
 class MappingView(ttk.Frame):
@@ -22,6 +29,7 @@ class MappingView(ttk.Frame):
         self._mapper: Mapper | None = None
         self._rows: list[dict] = []
         self._lookup = get_lookup_map()
+        self._updating_combos = False
         self._build()
         self._load_async()
 
@@ -240,7 +248,7 @@ class MappingView(ttk.Frame):
                 row["conf"], row["source"],
                 cy, py, int(row["confirmed"])
             )
-            if row["confirmed"] and row["code"]:
+            if row["confirmed"] and row["code"] and self._mapper:
                 self._mapper.confirm_and_learn(row["ledger"], row["code"])
 
     def _confirm_all_green(self):
@@ -271,35 +279,108 @@ class MappingView(ttk.Frame):
             self._on_complete()
 
     # ── Override Panel ────────────────────────────────────────────────────
+    def _set_override_selection(self, grp: str = "", hdg: str = "", sub: str = ""):
+        self._updating_combos = True
+        try:
+            matched_grp = ""
+            if grp:
+                norm_g = _norm_str(grp)
+                matched_grp = next(
+                    (k for k in self._tree_var if k.lower() == grp.lower()),
+                    next((k for k in self._tree_var if _norm_str(k) == norm_g), grp if grp in self._tree_var else "")
+                )
+            self._grp_var.set(matched_grp)
+
+            hdgs = list(self._tree_var.get(matched_grp, {}).keys())
+            self._hdg_cb["values"] = hdgs
+
+            matched_hdg = ""
+            if hdg and matched_grp:
+                norm_h = _norm_str(hdg)
+                matched_hdg = next(
+                    (h for h in hdgs if h.lower() == hdg.lower()),
+                    next((h for h in hdgs if _norm_str(h) == norm_h), hdg if hdg in hdgs else "")
+                )
+            self._hdg_var.set(matched_hdg)
+
+            subs = self._tree_var.get(matched_grp, {}).get(matched_hdg, [])
+            self._sub_cb["values"] = subs
+
+            matched_sub = ""
+            if sub and matched_hdg:
+                norm_s = _norm_str(sub)
+                matched_sub = next(
+                    (s for s in subs if s.lower() == sub.lower()),
+                    next((s for s in subs if _norm_str(s) == norm_s), sub if sub in subs else "")
+                )
+            self._sub_var.set(matched_sub)
+        finally:
+            self._updating_combos = False
+
     def _on_select(self, event):
         iid = self._grid.get_selected_iid()
         if not iid:
             return
-            
+
+        selected_row = None
         for row in self._rows:
             if str(row["raw_tb_id"]) == iid:
-                entry = self._lookup.get(row["code"])
-                if entry and entry.lookup_name:
-                    parts = [p.strip() for p in entry.lookup_name.split(">")]
-                    if len(parts) >= 3:
-                        self._grp_var.set(parts[0])
-                        self._hdg_var.set(parts[1])
-                        self._sub_var.set(parts[2])
-                    elif len(parts) == 2:
-                        self._grp_var.set(parts[0])
-                        self._hdg_var.set(parts[1])
-                        self._sub_var.set("")
-                    elif len(parts) == 1:
-                        self._grp_var.set(parts[0])
-                        self._hdg_var.set("")
-                        self._sub_var.set("")
-                else:
-                    self._grp_var.set("")
-                    self._hdg_var.set("")
-                    self._sub_var.set("")
+                selected_row = row
                 break
+        if not selected_row:
+            return
+
+        grp, hdg, sub = "", "", ""
+        code = selected_row.get("code")
+        entry = self._lookup.get(code) if code else None
+        tb_grp = (selected_row.get("group") or "").strip()
+
+        matched_from_tb = None
+        if tb_grp:
+            matched_from_tb = next(
+                (e for e in self._lookup.values() if e.lookup_name.strip().lower() == tb_grp.lower()),
+                None
+            )
+
+        if matched_from_tb:
+            grp = matched_from_tb.group
+            hdg = matched_from_tb.heading
+            sub = matched_from_tb.sub_heading
+        elif entry:
+            grp = entry.group
+            hdg = entry.heading
+            sub = entry.sub_heading
+        elif tb_grp:
+            if ">" in tb_grp:
+                parts = [p.strip() for p in tb_grp.split(">")]
+                grp = parts[0] if len(parts) > 0 else ""
+                hdg = parts[1] if len(parts) > 1 else ""
+                sub = ">".join(parts[2:]).strip() if len(parts) > 2 else ""
+            else:
+                norm_tb = _norm_str(tb_grp)
+                grp_match = next((g for g in self._tree_var if _norm_str(g) == norm_tb), None)
+                if grp_match:
+                    grp = grp_match
+                else:
+                    for g, hdgs in self._tree_var.items():
+                        hdg_match = next((h for h in hdgs if _norm_str(h) == norm_tb), None)
+                        if hdg_match:
+                            grp = g
+                            hdg = hdg_match
+                            break
+                    else:
+                        for e in self._lookup.values():
+                            if _norm_str(e.sub_heading) == norm_tb:
+                                grp = e.group
+                                hdg = e.heading
+                                sub = e.sub_heading
+                                break
+
+        self._set_override_selection(grp, hdg, sub)
 
     def _on_group_change(self, *_):
+        if getattr(self, "_updating_combos", False):
+            return
         grp = self._grp_var.get()
         hdgs = list(self._tree_var.get(grp, {}).keys())
         self._hdg_cb["values"] = hdgs
@@ -309,6 +390,8 @@ class MappingView(ttk.Frame):
             self._hdg_var.set("")
 
     def _on_heading_change(self, *_):
+        if getattr(self, "_updating_combos", False):
+            return
         grp = self._grp_var.get(); hdg = self._hdg_var.get()
         subs = self._tree_var.get(grp, {}).get(hdg, [])
         self._sub_cb["values"] = subs
@@ -326,7 +409,12 @@ class MappingView(ttk.Frame):
         # Find code
         target = f"{grp} > {hdg} > {sub}"
         code = next((e.code for e in self._lookup.values()
-                     if e.lookup_name == target), None)
+                     if e.group.lower() == grp.lower()
+                     and e.heading.lower() == hdg.lower()
+                     and e.sub_heading.lower() == sub.lower()), None)
+        if not code:
+            code = next((e.code for e in self._lookup.values()
+                         if e.lookup_name == target), None)
         if not code:
             return
         iid = self._grid.get_selected_iid()
@@ -341,6 +429,10 @@ class MappingView(ttk.Frame):
                 break
         self._save_to_db()
         self._render()
+        try:
+            self._grid.tree.selection_set(iid)
+        except Exception:
+            pass
 
     def _on_cell_change(self, iid: str, col_id: str, new_val: str):
         if col_id != "py":
