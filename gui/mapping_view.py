@@ -12,12 +12,13 @@ from gui.theme import primary_btn, secondary_btn, label
 
 class MappingView(ttk.Frame):
     def __init__(self, parent, db, settings_db, entity_type: str,
-                 on_complete: callable = None):
+                 on_complete: callable = None, on_back: callable = None):
         super().__init__(parent)
         self._db         = db
         self._sdb        = settings_db
         self._etype      = entity_type
         self._on_complete = on_complete
+        self._on_back    = on_back
         self._mapper: Mapper | None = None
         self._rows: list[dict] = []
         self._lookup = get_lookup_map()
@@ -32,7 +33,33 @@ class MappingView(ttk.Frame):
         primary_btn(top, "Auto-Map All", command=self._run_mapping).pack(side="left", padx=6)
         secondary_btn(top, "AI Assist (unresolved)", command=self._run_ai_assist).pack(side="left", padx=4)
         secondary_btn(top, "Confirm All Green", command=self._confirm_all_green).pack(side="left", padx=4)
+
+        # Bulk file operations
+        ttk.Separator(top, orient="vertical").pack(side="left", fill="y", padx=8)
+        secondary_btn(top, "📥 Download Template", command=self._download_template).pack(side="left", padx=4)
+        secondary_btn(top, "📥 Import Mapping", command=self._import_mapping).pack(side="left", padx=4)
+
         primary_btn(top, "✔ Confirm & Proceed  F9", command=self._confirm_all).pack(side="right", padx=4)
+        secondary_btn(top, "← Back to Import TB", command=self._back).pack(side="right", padx=4)
+
+        # Search and Filter bar
+        filter_bar = ttk.Frame(self)
+        filter_bar.pack(fill="x", padx=8, pady=(2, 4))
+        ttk.Label(filter_bar, text="🔍 Filter:", font=(T["font"], 9, "bold")).pack(side="left", padx=(0, 4))
+        self._filter_search_var = tk.StringVar()
+        self._filter_search_var.trace_add("write", lambda *_: self._render())
+        search_ent = ttk.Entry(filter_bar, textvariable=self._filter_search_var, width=24)
+        search_ent.pack(side="left", padx=4)
+
+        ttk.Label(filter_bar, text="Status:", font=(T["font"], 9, "bold")).pack(side="left", padx=(12, 4))
+        self._status_filter_var = tk.StringVar(value="All")
+        filter_cb = ttk.Combobox(
+            filter_bar, textvariable=self._status_filter_var,
+            values=["All", "Unresolved (Red)", "Review (Yellow)", "Confirmed (Green)"],
+            state="readonly", width=18
+        )
+        filter_cb.pack(side="left", padx=4)
+        filter_cb.bind("<<ComboboxSelected>>", lambda e: self._render())
 
         # Status bar
         self._status_var = tk.StringVar(value="Loading …")
@@ -60,10 +87,10 @@ class MappingView(ttk.Frame):
                   text="💡 Double-click any 'PY Amount ₹' cell to enter Previous Year figures.",
                   style="Muted.TLabel").pack(fill="x", padx=8, pady=(0, 4))
 
-        # Override panel (shown when row is selected)
+        # Override panel (strictly for selected row)
         self._ovr_frame = ttk.Frame(self, style="Card.TFrame", padding=6)
         self._ovr_frame.pack(fill="x", padx=8, pady=4)
-        label(self._ovr_frame, "Override Mapping:").grid(row=0, column=0, padx=4)
+        label(self._ovr_frame, "Override Selected Ledger Mapping:").grid(row=0, column=0, padx=4)
         self._grp_var  = tk.StringVar()
         self._hdg_var  = tk.StringVar()
         self._sub_var  = tk.StringVar()
@@ -77,10 +104,8 @@ class MappingView(ttk.Frame):
         self._hdg_cb.grid(row=0, column=2, padx=4)
         self._sub_cb.grid(row=0, column=3, padx=4)
         btn_frame = ttk.Frame(self._ovr_frame)
-        btn_frame.grid(row=1, column=0, columnspan=4, sticky="w", pady=(8, 0))
-        primary_btn(btn_frame, "Apply", command=self._apply_override).pack(side="left", padx=(4, 6))
-        secondary_btn(btn_frame, "Download Template", command=self._download_template).pack(side="left", padx=6)
-        secondary_btn(btn_frame, "Import Mapping", command=self._import_mapping).pack(side="left", padx=6)
+        btn_frame.grid(row=0, column=4, padx=8)
+        primary_btn(btn_frame, "Apply Override", command=self._apply_override).pack(side="left")
 
         self._tree_var = get_group_tree()
         self._grp_cb["values"] = list(self._tree_var.keys())
@@ -88,6 +113,10 @@ class MappingView(ttk.Frame):
         self._hdg_var.trace_add("write", self._on_heading_change)
 
         self._grid.tree.bind("<<TreeviewSelect>>", self._on_select)
+
+    def _back(self):
+        if self._on_back:
+            self._on_back()
 
     # ── Data ─────────────────────────────────────────────────────────────
     def _load_async(self):
@@ -151,16 +180,39 @@ class MappingView(ttk.Frame):
         threading.Thread(target=work, daemon=True).start()
 
     def _render(self):
+        query = getattr(self, "_filter_search_var", None)
+        q_str = query.get().strip().lower() if query else ""
+        status_filter = getattr(self, "_status_filter_var", None)
+        s_choice = status_filter.get() if status_filter else "All"
+
         grid_rows = []
         g = 0; y = 0; r = 0
         for row in self._rows:
-            entry = self._lookup.get(row["code"])
-            mapped_label = entry.lookup_name if entry else (row["code"] or "— Not Mapped —")
             conf   = row["conf"]
             conf_s = f"{conf:.0%}" if conf else "—"
             tag    = "green" if conf >= CONF_GREEN else ("yellow" if conf >= CONF_YELLOW else "red")
             if conf < CONF_GREEN: r += 1
             if conf < CONF_YELLOW: y += 1
+            if tag == "green": g += 1
+
+            # Search query matching
+            if q_str:
+                ledger_match = q_str in (row.get("ledger") or "").lower()
+                group_match = q_str in (row.get("group") or "").lower()
+                code_match = q_str in (row.get("code") or "").lower()
+                if not (ledger_match or group_match or code_match):
+                    continue
+
+            # Status filter matching
+            if s_choice == "Unresolved (Red)" and tag != "red":
+                continue
+            elif s_choice == "Review (Yellow)" and tag != "yellow":
+                continue
+            elif s_choice == "Confirmed (Green)" and tag != "green":
+                continue
+
+            entry = self._lookup.get(row["code"])
+            mapped_label = entry.lookup_name if entry else (row["code"] or "— Not Mapped —")
             cy_s = f"{row['cy']:,.2f}" if row["cy"] else "—"
             py_s = f"{row['py']:,.2f}" if row["py"] else "—"
             grid_rows.append({
@@ -169,11 +221,12 @@ class MappingView(ttk.Frame):
                 "values": [row["ledger"], row["group"], mapped_label,
                            conf_s, row["source"], cy_s, py_s],
             })
-            if tag == "green": g += 1
         self._grid.load_rows(grid_rows)
         total = len(self._rows)
+        shown = len(grid_rows)
+        shown_txt = f" (showing {shown})" if shown != total else ""
         self._status_var.set(
-            f"Total: {total}  |  ✅ Confirmed: {g}  |  ⚠ Review: {y-r}  |  🔴 Unresolved: {r}"
+            f"Total: {total}{shown_txt}  |  ✅ Confirmed: {g}  |  ⚠ Review: {y-r}  |  🔴 Unresolved: {r}"
         )
 
     def _save_to_db(self):
