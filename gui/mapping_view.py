@@ -77,8 +77,8 @@ class MappingView(ttk.Frame):
         # Grid
         cols = [
             ("ledger",   "Ledger Name (TB)",         240, "w",      180, False),
-            ("group",    "TB Group",                  320, "w",      220, False),
-            ("mapped",   "Mapped Head (Schedule III)", 160, "center", 120, False),
+            ("group",    "TB Group",                  300, "w",      200, False),
+            ("mapped",   "Mapped Head (Schedule III)", 260, "w",      160, False),
             ("conf",     "Confidence",                 90,  "center",  80, False),
             ("source",   "Source",                     80,  "center",  70, False),
             ("cy",       "CY Amount ₹",                120, "e",      100, False),
@@ -220,7 +220,13 @@ class MappingView(ttk.Frame):
                 continue
 
             code = row["code"] or ""
-            mapped_label = code if code else "— Not Mapped —"
+            entry = self._lookup.get(code) if code else None
+            if entry and entry.sub_heading:
+                mapped_label = entry.sub_heading
+            elif code:
+                mapped_label = code
+            else:
+                mapped_label = "— Not Mapped —"
             cy_s = f"{row['cy']:,.2f}" if row["cy"] else "—"
             py_s = f"{row['py']:,.2f}" if row["py"] else "—"
             grid_rows.append({
@@ -337,23 +343,20 @@ class MappingView(ttk.Frame):
         entry = self._lookup.get(code) if code else None
         tb_grp = (selected_row.get("group") or "").strip()
 
-        matched_from_tb = None
-        if tb_grp:
-            matched_from_tb = next(
-                (e for e in self._lookup.values() if e.lookup_name.strip().lower() == tb_grp.lower()),
-                None
-            )
-
-        if matched_from_tb:
-            grp = matched_from_tb.group
-            hdg = matched_from_tb.heading
-            sub = matched_from_tb.sub_heading
-        elif entry:
+        if entry:
             grp = entry.group
             hdg = entry.heading
             sub = entry.sub_heading
         elif tb_grp:
-            if ">" in tb_grp:
+            matched_from_tb = next(
+                (e for e in self._lookup.values() if e.lookup_name.strip().lower() == tb_grp.lower()),
+                None
+            )
+            if matched_from_tb:
+                grp = matched_from_tb.group
+                hdg = matched_from_tb.heading
+                sub = matched_from_tb.sub_heading
+            elif ">" in tb_grp:
                 parts = [p.strip() for p in tb_grp.split(">")]
                 grp = parts[0] if len(parts) > 0 else ""
                 hdg = parts[1] if len(parts) > 1 else ""
