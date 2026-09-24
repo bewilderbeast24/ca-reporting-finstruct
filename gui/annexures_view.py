@@ -16,10 +16,12 @@ from gui.theme import primary_btn, secondary_btn, label
 
 
 class AnnexuresView(ttk.Frame):
-    def __init__(self, parent, db, settings_db):
+    def __init__(self, parent, db, settings_db, on_proceed: callable = None, on_back: callable = None):
         super().__init__(parent)
         self._db   = db
         self._sdb  = settings_db
+        self._on_proceed = on_proceed
+        self._on_back = on_back
         self._tolerance = settings_db.get_annexure_tolerance()
         self._totals: dict = {}
         self._current_code: str | None = None
@@ -37,6 +39,24 @@ class AnnexuresView(ttk.Frame):
         if adj_rows:
             totals = apply_adjustments(totals, adj_rows, get_lookup_map())
         self._totals = totals
+
+    def _get_annexure_status(self, code: str) -> str:
+        try:
+            a = load_annexure(code, self._db, self._totals, self._tolerance)
+            has_values = any(r.cy_value != 0 or r.py_value != 0 for r in a.rows)
+            if not has_values and (a.tb_total_cy != 0 or a.tb_total_py != 0):
+                return "○"
+            return "✔" if a.is_balanced else "⚠"
+        except Exception:
+            return "○"
+
+    def _refresh_combo_status(self):
+        current_idx = self._ann_combo.current()
+        annx_labels = [(code, defn["title"]) for code, defn in ANNEXURE_DEFS.items()]
+        vals = [f"{self._get_annexure_status(c)} {c} — {t}" for c, t in annx_labels]
+        self._ann_combo.configure(values=vals)
+        if 0 <= current_idx < len(vals):
+            self._ann_combo.current(current_idx)
 
     def _build(self):
         top = ttk.Frame(self)
@@ -64,8 +84,8 @@ class AnnexuresView(ttk.Frame):
         annx_labels  = [(code, defn["title"]) for code, defn in ANNEXURE_DEFS.items()]
         self._ann_combo = ttk.Combobox(
             sel_frame, textvariable=self._ann_var,
-            values=[f"{c} — {t}" for c, t in annx_labels],
-            state="readonly", width=70,
+            values=[f"{self._get_annexure_status(c)} {c} — {t}" for c, t in annx_labels],
+            state="readonly", width=74,
         )
         self._ann_combo.pack(side="left", padx=4)
         self._ann_combo.bind("<<ComboboxSelected>>", self._on_annexure_select)
@@ -116,11 +136,15 @@ class AnnexuresView(ttk.Frame):
         # Save bar
         save_bar = ttk.Frame(self)
         save_bar.pack(fill="x", padx=8, pady=6)
-        primary_btn(save_bar, "💾 Save Annexure", command=self._save).pack(side="right", padx=4)
-        secondary_btn(save_bar, "📋 Export to Excel template",
-                      command=self._export_template).pack(side="right", padx=4)
+        secondary_btn(save_bar, "← Back to PPE", command=self._back).pack(side="left", padx=4)
         secondary_btn(save_bar, "🔄 Reload from TB total",
                       command=self._reload_blank).pack(side="left", padx=4)
+        primary_btn(save_bar, "Proceed to Generate FS →", command=self._proceed).pack(side="right", padx=4)
+        primary_btn(save_bar, "💾 Save Annexure", command=self._save).pack(side="right", padx=4)
+        secondary_btn(save_bar, "📥 Import from Excel",
+                      command=self._import_excel).pack(side="right", padx=4)
+        secondary_btn(save_bar, "📋 Export to Excel template",
+                      command=self._export_template).pack(side="right", padx=4)
 
         # Load default first annexure
         self._on_annexure_select()
@@ -140,7 +164,12 @@ class AnnexuresView(ttk.Frame):
         sel = self._ann_combo.get()
         if not sel:
             return
-        code = sel.split(" — ")[0]
+        clean = sel
+        for s in ("✔ ", "⚠ ", "○ "):
+            if clean.startswith(s):
+                clean = clean[len(s):]
+                break
+        code = clean.split(" — ")[0].strip()
         self._current_code = code
         self._current_annx = load_annexure(code, self._db, self._totals, self._tolerance)
         self._render_rows()
@@ -233,7 +262,75 @@ class AnnexuresView(ttk.Frame):
                          f"{a.code}: CY variance ₹{a.variance_cy:.2f}")
         save_annexure(a, self._db)
         self._db.log("ANNEXURE_SAVED", f"{a.code}: {len(a.rows)} rows")
+        self._refresh_combo_status()
         messagebox.showinfo("Saved", f"✅ {a.title}\nsaved successfully.")
+
+    def _proceed(self):
+        if self._on_proceed:
+            self._on_proceed()
+
+    def _back(self):
+        if self._on_back:
+            self._on_back()
+
+    def _import_excel(self):
+        if not self._current_annx:
+            return
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(
+            title=f"Import {self._current_code} from Excel",
+            filetypes=[("Excel Workbook", "*.xlsx"), ("All Files", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(path, data_only=True)
+            ws = wb.active
+            label_map = {r.label.strip().lower(): r for r in self._current_annx.rows}
+            matched = 0
+            for row in ws.iter_rows(values_only=True):
+                if not row or row[0] is None:
+                    continue
+                key = str(row[0]).strip().lower()
+                if key in label_map:
+                    target = label_map[key]
+                    try:
+                        target.cy_value = float(row[1]) if len(row) > 1 and row[1] is not None else 0.0
+                    except (ValueError, TypeError):
+                        pass
+                    try:
+                        target.py_value = float(row[2]) if len(row) > 2 and row[2] is not None else 0.0
+                    except (ValueError, TypeError):
+                        pass
+                    matched += 1
+            if matched == 0:
+                # Attempt positional import for rows after header
+                data_rows = []
+                for row in ws.iter_rows(values_only=True):
+                    if not row or row[0] is None:
+                        continue
+                    if len(row) >= 2 and any(isinstance(c, (int, float)) for c in row[1:3]):
+                        data_rows.append(row)
+                for i, row in enumerate(data_rows):
+                    if i < len(self._current_annx.rows):
+                        target = self._current_annx.rows[i]
+                        try:
+                            target.cy_value = float(row[1]) if len(row) > 1 and row[1] is not None else 0.0
+                        except (ValueError, TypeError):
+                            pass
+                        try:
+                            target.py_value = float(row[2]) if len(row) > 2 and row[2] is not None else 0.0
+                        except (ValueError, TypeError):
+                            pass
+                        matched += 1
+
+            self._render_rows()
+            self._recompute_and_render()
+            self._refresh_combo_status()
+            messagebox.showinfo("Import successful", f"Imported {matched} values from Excel.")
+        except Exception as e:
+            messagebox.showerror("Import failed", f"Could not import Excel file:\n{e}")
 
     def _export_template(self):
         if not self._current_annx:
