@@ -156,6 +156,10 @@ def test_raw_tb_operations(project_db):
     assert tb[0]["ledger_name"] == "Cash"
     assert tb[1]["cy_net"] == -200
     
+    project_db.update_raw_tb_group(tb[0]["id"], "Current Assets > Bank")
+    updated_tb = project_db.get_raw_tb()
+    assert updated_tb[0]["group_name"] == "Current Assets > Bank"
+    
     project_db.clear_raw_tb()
     assert len(project_db.get_raw_tb()) == 0
     # clearing raw tb also clears wtb
