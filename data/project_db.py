@@ -350,6 +350,10 @@ class ProjectDB:
     def get_raw_tb(self) -> list[sqlite3.Row]:
         return self._conn.execute("SELECT * FROM raw_tb ORDER BY id").fetchall()
 
+    def update_raw_tb_group(self, raw_tb_id: int, group_name: str):
+        with self._tx():
+            self._conn.execute("UPDATE raw_tb SET group_name=? WHERE id=?", (group_name, raw_tb_id))
+
     # ── WTB ──────────────────────────────────────────────────────────────
     def upsert_wtb(self, raw_tb_id: int, mapping_code: str, confidence: float,
                    source: str, cy_net: float, py_net: float, confirmed: int = 0):
