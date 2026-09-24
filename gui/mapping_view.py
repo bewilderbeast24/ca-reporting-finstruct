@@ -68,13 +68,13 @@ class MappingView(ttk.Frame):
 
         # Grid
         cols = [
-            ("ledger",   "Ledger Name (TB)",         240, "w"),
-            ("group",    "TB Group",                  120, "w"),
-            ("mapped",   "Mapped Head (Schedule III)", 280, "w"),
-            ("conf",     "Confidence",                 80,  "center"),
-            ("source",   "Source",                     70,  "center"),
-            ("cy",       "CY Amount ₹",                110, "e"),
-            ("py",       "PY Amount ₹",                110, "e"),
+            ("ledger",   "Ledger Name (TB)",         260, "w",      200, False),
+            ("group",    "TB Group",                  140, "w",      120, False),
+            ("mapped",   "Mapped Head (Schedule III)", 380, "w",      300, False),
+            ("conf",     "Confidence",                 90,  "center",  80, False),
+            ("source",   "Source",                     80,  "center",  70, False),
+            ("cy",       "CY Amount ₹",                120, "e",      100, False),
+            ("py",       "PY Amount ₹",                120, "e",      100, False),
         ]
         from gui.fs_grid_view import EditableGrid
         self._grid = EditableGrid(self, columns=cols,
