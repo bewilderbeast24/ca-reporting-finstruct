@@ -183,9 +183,9 @@ def test_mapping_view_apply_override(tk_root, mock_db, mock_sdb):
     assert view._rows[0]["confirmed"] is True
     mock_db.upsert_wtb.assert_called()
 
-    # Verify grid displays code word in Mapped Head and full hierarchy in TB Group
+    # Verify grid displays Schedule III Ledger Name in Mapped Head and full hierarchy in TB Group
     all_rows = view._grid.get_all_rows()
     assert all_rows[0][1] == "Shareholders Funds > Share Capital > Equity Share Capital"
-    assert all_rows[0][2] == "CO_EL001"
+    assert all_rows[0][2] == "Equity Share Capital"
 
 
