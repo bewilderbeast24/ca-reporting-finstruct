@@ -91,16 +91,21 @@ class WTBView(ttk.Frame):
             from core.master_db import get_lookup_map
             lm = get_lookup_map()
             grid_rows = []
+            seen_iids = set()
             for i, ln in enumerate(lines):
                 e = lm.get(ln.mapping_code)
-                group   = e.group    if e else ""
+                group   = e.group    if e else (ln.group_name or "")
                 heading = e.heading  if e else ""
                 fs_tag  = e.fs_tag   if e else ""
                 cy_s = f"{ln.cy_net:,.2f}" if ln.cy_net else "—"
                 py_s = f"{ln.py_net:,.2f}" if ln.py_net else "—"
                 tag = "alt" if i % 2 else ""
+                row_iid = str(ln.wtb_id) if ln.wtb_id else f"r_{ln.raw_tb_id}"
+                if row_iid in seen_iids:
+                    row_iid = f"r_{ln.raw_tb_id}_{i}"
+                seen_iids.add(row_iid)
                 grid_rows.append({
-                    "iid": str(ln.wtb_id),
+                    "iid": row_iid,
                     "tag": tag,
                     "values": [group, heading, ln.ledger_name,
                                ln.mapping_code, cy_s, py_s, fs_tag],
@@ -124,12 +129,14 @@ class WTBView(ttk.Frame):
             totals = aggregate_by_code(lines)
             et = self._db.get_meta("entity_type") or "COMPANY"
             r  = validate_balance(totals, et)
+            unmapped = sum(1 for ln in lines if not ln.mapping_code)
+            unmapped_msg = f"  |  ⚠ {unmapped} unmapped" if unmapped else ""
             if r.ok:
                 self._status_var.set(
                     f"✅ {len(lines)} ledgers  |  Balance Sheet balances  |  "
-                    f"Total mapped codes: {len(totals)}")
+                    f"Total mapped codes: {len(totals)}{unmapped_msg}")
             else:
-                self._status_var.set("⚠ " + " | ".join(r.errors + r.warnings))
+                self._status_var.set("⚠ " + " | ".join(r.errors + r.warnings) + unmapped_msg)
         except Exception as e:
             import traceback
             err_msg = f"Failed to load Working Trial Balance: {str(e)}"
