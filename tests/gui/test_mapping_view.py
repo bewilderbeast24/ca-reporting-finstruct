@@ -75,3 +75,16 @@ def test_mapping_view_search_and_status_filter(mock_tree, mock_lookup, tk_root, 
     view._status_filter_var.set("Unresolved (Red)")
     view._render()
     assert "showing 1" in view._status_var.get()
+
+@patch('gui.mapping_view.get_lookup_map', return_value={})
+@patch('gui.mapping_view.get_group_tree', return_value={"Grp1": {"H1": ["S1"]}})
+def test_mapping_view_column_widths_and_fixed_layout(mock_tree, mock_lookup, tk_root, mock_db, mock_sdb):
+    with patch('gui.mapping_view.threading.Thread'):
+        view = MappingView(tk_root, mock_db, mock_sdb, "COMPANY")
+    tree = view._grid.tree
+    for col_id in ["ledger", "group", "mapped", "conf", "source", "cy", "py"]:
+        info = tree.column(col_id)
+        assert info["stretch"] == 0, f"Column {col_id} should not stretch"
+        assert info["minwidth"] > 20, f"Column {col_id} should have a meaningful minwidth"
+    assert tree.column("mapped")["width"] >= 350
+
