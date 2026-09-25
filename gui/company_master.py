@@ -159,12 +159,12 @@ class CompanyMasterForm(ttk.Frame):
         self._field(inner, r, "signing_date",    "Signing Date (DD-Mon-YYYY)"); r += 1
         r += 1
 
-        # ── Buttons ──────────────────────────────────────────────────────
+        # ── Buttons (proceed on right so it stays visible at 1024px) ───
         btn_frame = ttk.Frame(inner)
         btn_frame.grid(row=r, column=0, columnspan=2, sticky="ew", padx=6, pady=10)
-        primary_btn(btn_frame, "Save & Next: Import TB →", command=self._save_and_next).pack(side="left", padx=4)
-        secondary_btn(btn_frame, "💾  Save", command=self._save).pack(side="left", padx=4)
-        secondary_btn(btn_frame, "↺  Reset", command=self._load).pack(side="left", padx=4)
+        primary_btn(btn_frame, "Save & Next →", command=self._save_and_next).pack(side="right", padx=2)
+        secondary_btn(btn_frame, "💾  Save", command=self._save).pack(side="left", padx=2)
+        secondary_btn(btn_frame, "↺  Reset", command=self._load).pack(side="left", padx=2)
 
         inner.columnconfigure(1, weight=1)
 
