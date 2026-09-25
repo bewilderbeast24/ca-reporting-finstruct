@@ -164,26 +164,26 @@ class TBImportView(ttk.Frame):
         top.pack(fill="x", padx=8, pady=6)
         label(top, "2.  Import Trial Balance", style="Sec.TLabel").pack(side="left")
 
-        # Template download bar
+        # Template download bar (Zoho packed first on right so it stays visible)
         tmpl = ttk.Frame(self)
         tmpl.pack(fill="x", padx=8, pady=(4, 0))
-        label(tmpl, "No TB file yet?").pack(side="left", padx=4)
-        secondary_btn(tmpl, "📥  Download TB Template for this entity",
-                      command=self._download_template).pack(side="left", padx=4)
+        secondary_btn(tmpl, "🔗 Zoho Books",
+                      command=self._zoho_connect).pack(side="right", padx=2)
+        label(tmpl, "No TB file yet?").pack(side="left", padx=2)
+        secondary_btn(tmpl, "📥 TB Template",
+                      command=self._download_template).pack(side="left", padx=2)
         label(tmpl, "Fill in Excel, then import back here.",
-               style="Muted.TLabel").pack(side="left", padx=6)
-        secondary_btn(tmpl, "🔗  Connect Zoho Books",
-                      command=self._zoho_connect).pack(side="right", padx=4)
+               style="Muted.TLabel").pack(side="left", padx=4)
 
         # File picker
         pick = ttk.Frame(self)
         pick.pack(fill="x", padx=8, pady=4)
-        label(pick, "Source File:").pack(side="left", padx=4)
+        label(pick, "Source File:").pack(side="left", padx=2)
         self._path_var = tk.StringVar()
         ttk.Entry(pick, textvariable=self._path_var, width=50,
-                  state="readonly").pack(side="left", padx=4)
-        secondary_btn(pick, "Browse …", command=self._browse).pack(side="left", padx=4)
-        primary_btn(pick, "Import", command=self._do_import).pack(side="left", padx=8)
+                  state="readonly").pack(side="left", padx=2)
+        secondary_btn(pick, "Browse …", command=self._browse).pack(side="left", padx=2)
+        primary_btn(pick, "Import", command=self._do_import).pack(side="left", padx=4)
 
         # Status
         self._status_var = tk.StringVar(value="Select a file to import Trial Balance data.")
@@ -209,15 +209,17 @@ class TBImportView(ttk.Frame):
         self._grid = EditableGrid(self, columns=cols)
         self._grid.pack(fill="both", expand=True, padx=8, pady=4)
 
-        # Bottom bar
+        # Bottom bar (nav first on right so Proceed stays visible at 1024px)
         bot = ttk.Frame(self)
         bot.pack(fill="x", padx=8, pady=6)
-        secondary_btn(bot, "← Back to Entity Setup", command=self._back).pack(side="left")
+        bot_nav = ttk.Frame(bot)
+        bot_nav.pack(side="right")
+        primary_btn(bot_nav, "✔ Confirm & Proceed  →", command=self._confirm).pack(side="right")
+        secondary_btn(bot_nav, "Clear", command=self._clear).pack(side="right", padx=2)
+        secondary_btn(bot, "← Back", command=self._back).pack(side="left")
         self._count_var = tk.StringVar(value="")
         ttk.Label(bot, textvariable=self._count_var,
-                  style="Muted.TLabel").pack(side="left", padx=12)
-        primary_btn(bot, "✔ Confirm & Proceed  →", command=self._confirm).pack(side="right")
-        secondary_btn(bot, "Clear Preview", command=self._clear).pack(side="right", padx=6)
+                  style="Muted.TLabel").pack(side="left", padx=8)
 
     def _back(self):
         if self._on_back:
