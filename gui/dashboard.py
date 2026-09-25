@@ -27,8 +27,8 @@ class Dashboard(ttk.Frame):
         label(hdr, "FinStruct", style="Title.TLabel").pack(side="left")
         label(hdr, "Financial Statement Automation",
               style="Muted.TLabel").pack(side="left", padx=12)
-        primary_btn(hdr, "+ New Project", command=self._new_project).pack(side="right", padx=4)
-        secondary_btn(hdr, "Open .finstruct …", command=self._browse_open).pack(side="right", padx=4)
+        primary_btn(hdr, "+ New Project", command=self._new_project).pack(side="right", padx=2)
+        secondary_btn(hdr, "Open …", command=self._browse_open).pack(side="right", padx=2)
 
         ttk.Separator(self, orient="horizontal").pack(fill="x")
 
