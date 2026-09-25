@@ -14,6 +14,25 @@ from core.master_db import get_lookup_map, MappingEntry
 
 RowType = Literal["HEADER", "SECTION", "DATA", "SUBTOTAL", "TOTAL", "GRAND", "TEXT", "BLANK"]
 
+# TB sign convention: Credit = negative, Debit = positive.
+# Equity & Liabilities and Revenue/Income credits arrive negative,
+# so present them in BS/PL after multiplying by -1.
+_CREDIT_NEG_GROUPS = frozenset({
+    "Shareholders Funds",
+    "Non-Current Liabilities",
+    "Current Liabilities",
+    "Capital",
+    "Partners' Capital",
+    "Capital / Members Fund",
+    "Reserves & Surplus",
+    "Corpus Fund",
+    "Earmarked Funds",
+    "Capital Grants",
+    "Loans",
+    "Revenue",
+    "Income",
+})
+
 
 @dataclass
 class FSLine:
@@ -84,27 +103,60 @@ class FSEngine:
         from core.master_db import get_master
         self._master_entries = get_master([self._etype])
 
+    def _signed(self, val: float, entry) -> float:
+        signed = -val if entry and entry.sign == "DR_POSITIVE" else val
+        if entry and entry.group in _CREDIT_NEG_GROUPS:
+            return -signed
+        return signed
+
     def _cy(self, code: str) -> float:
         v = self._totals.get(code, (0.0, 0.0))[0]
         val = _r(v, self._div)
         entry = self._lookup.get(code)
-        if entry and entry.sign == "DR_POSITIVE":
-            return -val
-        return val
+        return self._signed(val, entry)
 
     def _py(self, code: str) -> float:
         v = self._totals.get(code, (0.0, 0.0))[1]
         val = _r(v, self._div)
         entry = self._lookup.get(code)
-        if entry and entry.sign == "DR_POSITIVE":
-            return -val
-        return val
+        return self._signed(val, entry)
 
     def _sum_cy(self, codes: list[str]) -> float:
         return round(sum(self._cy(c) for c in codes), 2)
 
     def _sum_py(self, codes: list[str]) -> float:
         return round(sum(self._py(c) for c in codes), 2)
+
+    def _pat_for_reserves(self) -> tuple[float, float]:
+        """Net P&L surplus for BS Reserves: income FS minus expense FS.
+
+        Income groups (Revenue/Income) sum as-is (DR negatives auto-reduce).
+        Expense groups net as DR minus CR (closing-stock credits reduce expense).
+        """
+        inc_cy = inc_py = exp_cy = exp_py = 0.0
+        for code in self._totals:
+            entry = self._lookup.get(code)
+            if not entry or entry.fs_tag not in ("PL", "IE"):
+                # Keep legacy CO_IN/CO_EX fallback for codes missing lookup
+                if not (code.startswith("CO_IN") or code.startswith("CO_EX")):
+                    continue
+                entry = self._lookup.get(code)
+            if entry and entry.group in ("Revenue", "Income"):
+                inc_cy += self._cy(code)
+                inc_py += self._py(code)
+            elif entry:
+                if entry.sign == "CR_POSITIVE":
+                    exp_cy -= self._cy(code)
+                    exp_py -= self._py(code)
+                else:
+                    exp_cy += self._cy(code)
+                    exp_py += self._py(code)
+            else:
+                # Unknown code: treat raw as expense-style (legacy behaviour)
+                v = self._totals.get(code, (0.0, 0.0))
+                exp_cy += -_r(v[0], self._div)
+                exp_py += -_r(v[1], self._div)
+        return round(inc_cy - exp_cy, 2), round(inc_py - exp_py, 2)
 
     def _get_meta_sum(self, group: str | None = None, heading: str | None = None, 
                       fs_tag: str | None = None) -> tuple[float, float]:
@@ -163,10 +215,9 @@ class FSEngine:
                     head_py = sum(self._py(e.code) for e in entries)
                     
                     if fs_tag == "BS" and head_name in ("Reserves & Surplus", "Corpus Fund"):
-                        pat_cy_raw = sum(v[0] for k, v in self._totals.items() if (self._lookup.get(k) and self._lookup.get(k).fs_tag in ("PL", "IE")) or k.startswith("CO_IN") or k.startswith("CO_EX"))
-                        pat_py_raw = sum(v[1] for k, v in self._totals.items() if (self._lookup.get(k) and self._lookup.get(k).fs_tag in ("PL", "IE")) or k.startswith("CO_IN") or k.startswith("CO_EX"))
-                        head_cy += _r(pat_cy_raw, self._div)
-                        head_py += _r(pat_py_raw, self._div)
+                        pat_cy, pat_py = self._pat_for_reserves()
+                        head_cy += pat_cy
+                        head_py += pat_py
 
                     # Use note number from first entry if available
                     note = next((e.note_number for e in entries if e.note_number), None)
