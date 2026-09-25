@@ -4,7 +4,7 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk, messagebox
 from config import THEME as T
-from gui.theme import primary_btn, secondary_btn, label
+from gui.theme import primary_btn, secondary_btn, label, ribbon
 from core.wtb_engine import build_wtb_lines, aggregate_by_code, validate_balance
 from gui.fs_grid_view import EditableGrid
 
@@ -19,13 +19,13 @@ class WTBView(ttk.Frame):
         self._load()
 
     def _build(self):
-        top = ttk.Frame(self)
-        top.pack(fill="x", padx=8, pady=6)
-        label(top, "4.  Working Trial Balance / Mapped TB", style="Sec.TLabel").pack(side="left")
-        
-        primary_btn(top, "✔ Proceed to PPE →", command=self._proceed).pack(side="right", padx=4)
-        secondary_btn(top, "Validate F9", command=self._validate).pack(side="right", padx=4)
-        secondary_btn(top, "← Back to Mapping", command=self._back).pack(side="right", padx=4)
+        _, top, nav = ribbon(self)
+        # Navigation first so it stays visible at 1024px
+        primary_btn(nav, "✔ Proceed to PPE →", command=self._proceed).pack(side="right", padx=2)
+        secondary_btn(nav, "Validate F9", command=self._validate).pack(side="right", padx=2)
+        secondary_btn(nav, "← Back to Mapping", command=self._back).pack(side="right", padx=2)
+
+        label(top, "4.  Working Trial Balance", style="Sec.TLabel").pack(side="left")
 
         self._status_var = tk.StringVar(value="")
         ttk.Label(self, textvariable=self._status_var,
