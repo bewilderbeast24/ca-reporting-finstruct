@@ -6,7 +6,7 @@ from tkinter import ttk, simpledialog
 from config import THEME as T
 from core.notes_engine import Note
 from core.fs_engine import FSLine
-from gui.theme import label, primary_btn, secondary_btn, scrolled_frame
+from gui.theme import label, primary_btn, secondary_btn, scrolled_frame, ribbon
 
 
 def _fmt(v):
@@ -138,26 +138,26 @@ class NotesView(ttk.Frame):
             return ("Rs. Current Year", "Rs. Previous Year")
 
     def _build(self):
-        top = ttk.Frame(self)
-        top.pack(fill="x", padx=8, pady=6)
-        label(top, "7.  Notes to Financial Statements", style="Sec.TLabel").pack(side="left")
+        _, top, nav = ribbon(self)
+        # Navigation first so it stays visible at 1024px
+        primary_btn(nav, "Proceed to Reports →", command=self._proceed).pack(side="right", padx=2)
+        primary_btn(nav, "💾 Save All", command=self._save_all).pack(side="right", padx=2)
+        secondary_btn(nav, "← Back to FS", command=self._back).pack(side="right", padx=2)
+        self._counter_lbl = label(nav, "", style="Muted.TLabel")
+        self._counter_lbl.pack(side="right", padx=4)
+
+        label(top, "7.  Notes", style="Sec.TLabel").pack(side="left")
 
         if self._notes:
-            secondary_btn(top, "◀ Prev Page", command=self._prev_page).pack(side="left", padx=(12, 2))
-            secondary_btn(top, "Next Page ▶", command=self._next_page).pack(side="left", padx=2)
-            ttk.Label(top, text="Jump to:").pack(side="left", padx=(8, 2))
+            secondary_btn(top, "◀ Prev", command=self._prev_page).pack(side="left", padx=2)
+            secondary_btn(top, "Next ▶", command=self._next_page).pack(side="left", padx=2)
+            ttk.Label(top, text="Jump:").pack(side="left", padx=(4, 2))
             self._jump_var = tk.StringVar()
             jump_vals = [f"Note {n.number}: {n.title}" for n in self._notes]
             self._jump_combo = ttk.Combobox(top, textvariable=self._jump_var, values=jump_vals,
-                                            state="readonly", width=34)
+                                            state="readonly", width=24)
             self._jump_combo.pack(side="left", padx=2)
             self._jump_combo.bind("<<ComboboxSelected>>", self._on_jump_selected)
-
-        primary_btn(top, "Proceed to Reports →", command=self._proceed).pack(side="right", padx=4)
-        primary_btn(top, "💾 Save All Note Edits", command=self._save_all).pack(side="right", padx=4)
-        secondary_btn(top, "← Back to Financial Statements", command=self._back).pack(side="right", padx=4)
-        self._counter_lbl = label(top, "", style="Muted.TLabel")
-        self._counter_lbl.pack(side="right", padx=8)
 
         # Validation: check if notes exist
         if not self._notes:
