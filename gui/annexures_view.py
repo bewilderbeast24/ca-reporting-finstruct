@@ -12,7 +12,7 @@ from core.annexures import (
 )
 from core.wtb_engine import aggregate_by_code, build_wtb_lines, apply_adjustments
 from core.master_db import get_lookup_map
-from gui.theme import primary_btn, secondary_btn, label
+from gui.theme import primary_btn, secondary_btn, label, ribbon
 
 
 class AnnexuresView(ttk.Frame):
@@ -59,10 +59,11 @@ class AnnexuresView(ttk.Frame):
             self._ann_combo.current(current_idx)
 
     def _build(self):
-        top = ttk.Frame(self)
-        top.pack(fill="x", padx=8, pady=6)
-        label(top, "5b.  Custom Annexures (Trade Rec/Pay Ageing, Share Capital, Borrowings)",
+        _, top, _ = ribbon(self)
+        label(top, "5b.  Custom Annexures",
               style="Sec.TLabel").pack(side="left")
+        label(top, "(Ageing, Share Capital, Borrowings)",
+              style="Muted.TLabel").pack(side="left", padx=2)
 
         # Tolerance config
         tol_frame = ttk.Frame(self)
@@ -133,18 +134,19 @@ class AnnexuresView(ttk.Frame):
             scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda e: canvas.itemconfig(win, width=e.width))
 
-        # Save bar
+        # Save bar (nav first so Proceed stays visible at 1024px)
         save_bar = ttk.Frame(self)
         save_bar.pack(fill="x", padx=8, pady=6)
-        secondary_btn(save_bar, "← Back to PPE", command=self._back).pack(side="left", padx=4)
-        secondary_btn(save_bar, "🔄 Reload from TB total",
-                      command=self._reload_blank).pack(side="left", padx=4)
-        primary_btn(save_bar, "Proceed to Generate FS →", command=self._proceed).pack(side="right", padx=4)
-        primary_btn(save_bar, "💾 Save Annexure", command=self._save).pack(side="right", padx=4)
-        secondary_btn(save_bar, "📥 Import from Excel",
-                      command=self._import_excel).pack(side="right", padx=4)
-        secondary_btn(save_bar, "📋 Export to Excel template",
-                      command=self._export_template).pack(side="right", padx=4)
+        save_nav = ttk.Frame(save_bar)
+        save_nav.pack(side="right")
+        primary_btn(save_nav, "Proceed to FS →", command=self._proceed).pack(side="right", padx=2)
+        primary_btn(save_nav, "💾 Save", command=self._save).pack(side="right", padx=2)
+        secondary_btn(save_nav, "📥 Import", command=self._import_excel).pack(side="right", padx=2)
+        secondary_btn(save_nav, "📋 Template", command=self._export_template).pack(side="right", padx=2)
+        save_left = ttk.Frame(save_bar)
+        save_left.pack(side="left", fill="x", expand=True)
+        secondary_btn(save_left, "← Back to PPE", command=self._back).pack(side="left", padx=2)
+        secondary_btn(save_left, "🔄 Reload TB total", command=self._reload_blank).pack(side="left", padx=2)
 
         # Load default first annexure
         self._on_annexure_select()
