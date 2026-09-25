@@ -25,10 +25,12 @@ def test_fs_document():
 
 def test_fs_engine_bs_includes_shareholders_funds_in_totals():
     """Verify Shareholders Funds is included in TOTAL — EQUITY AND LIABILITIES and balances with assets."""
+    # TB convention: Credit = negative, Debit = positive.
+    # EL/Revenue credits arrive negative and are flipped *-1 in FS.
     totals = {
-        "CO_EL001": (100000.0, 80000.0),   # Share Capital (Shareholders Funds)
-        "CO_EL003": (25000.0, 20000.0),    # Reserves & Surplus (Shareholders Funds)
-        "CO_EL020": (50000.0, 40000.0),    # Short Term Borrowings (Current Liabilities)
+        "CO_EL001": (-100000.0, -80000.0),   # Share Capital (Shareholders Funds)
+        "CO_EL003": (-25000.0, -20000.0),    # Reserves & Surplus (Shareholders Funds)
+        "CO_EL020": (-50000.0, -40000.0),    # Short Term Borrowings (Current Liabilities)
         "CO_AS001": (-175000.0, -140000.0) # PPE (Non-Current Assets)
     }
     engine = FSEngine(entity_type="COMPANY", totals=totals, entity_master={}, fy="2024-25", divisor=1)
@@ -64,8 +66,8 @@ def test_fs_engine_bs_includes_shareholders_funds_in_totals():
 def test_fs_engine_bs_imbalance_detected():
     """Verify imbalance is properly detected and flagged."""
     totals = {
-        "CO_EL001": (100000.0, 0.0),    # Share Capital: 100k
-        "CO_EL020": (50000.0, 0.0),     # Short Term Borrowings: 50k
+        "CO_EL001": (-100000.0, 0.0),    # Share Capital: 100k credit (negative in TB)
+        "CO_EL020": (-50000.0, 0.0),     # Short Term Borrowings: 50k credit (negative in TB)
         "CO_AS001": (-160000.0, 0.0)    # Assets: 160k (10k imbalance)
     }
     engine = FSEngine(entity_type="COMPANY", totals=totals, entity_master={}, fy="2024-25", divisor=1)
@@ -81,8 +83,8 @@ def test_fs_engine_bs_imbalance_detected():
 def test_fs_engine_bs_non_corporate_totals():
     """Verify non-corporate entity formats generate TOTAL — FUNDS & LIABILITIES."""
     totals = {
-        "LL_EL001": (80000.0, 0.0),     # Partners' Capital
-        "LL_EL007": (20000.0, 0.0),     # Current Liabilities
+        "LL_EL001": (-80000.0, 0.0),     # Partners' Capital (credit-negative)
+        "LL_EL007": (-20000.0, 0.0),     # Current Liabilities (credit-negative)
         "LL_AS010": (-100000.0, 0.0)    # Fixed Assets
     }
     engine = FSEngine(entity_type="LLP", totals=totals, entity_master={}, fy="2024-25", divisor=1)
@@ -101,9 +103,9 @@ def test_fs_engine_bs_non_corporate_totals():
 def test_fs_engine_bs_unclosed_pl_transferred_to_reserves():
     """Verify unclosed P&L net profit is included in Reserves & Surplus on Balance Sheet."""
     totals = {
-        "CO_EL001": (100000.0, 0.0),    # Share Capital
+        "CO_EL001": (-100000.0, 0.0),    # Share Capital (credit-negative)
         "CO_AS023": (-120000.0, 0.0),   # Cash & Bank
-        "CO_IN001": (50000.0, 0.0),     # Revenue (Credit)
+        "CO_IN001": (-50000.0, 0.0),     # Revenue (Credit-negative -> flipped to +50k)
         "CO_EX020": (-30000.0, 0.0)     # Expense (Debit) -> Net PAT = 20,000
     }
     engine = FSEngine(entity_type="COMPANY", totals=totals, entity_master={}, fy="2024-25", divisor=1)
