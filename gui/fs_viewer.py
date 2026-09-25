@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from config import THEME as T
 from core.fs_engine import FSDocument, FSLine
-from gui.theme import primary_btn, secondary_btn, label
+from gui.theme import primary_btn, secondary_btn, label, ribbon
 from gui.fs_grid_view import EditableGrid
 
 
@@ -40,27 +40,27 @@ class FSViewer(ttk.Frame):
         self._build()
 
     def _build(self):
-        top = ttk.Frame(self)
-        top.pack(fill="x", padx=8, pady=6)
+        _, top, nav = ribbon(self)
+        # Navigation first so it stays visible at 1024px
+        primary_btn(nav, "→ Notes  F10", command=self._go_notes).pack(side="right", padx=2)
+        secondary_btn(nav, "← Back", command=self._back).pack(side="right", padx=2)
+
         label(top, "6.  Financial Statements", style="Sec.TLabel").pack(side="left")
-        primary_btn(top, "💾 Save Overrides", command=self._save_overrides).pack(side="left", padx=(8, 4))
-        secondary_btn(top, "🔄 Revert Overrides", command=self._revert_overrides).pack(side="left", padx=4)
+        primary_btn(top, "💾 Save", command=self._save_overrides).pack(side="left", padx=2)
+        secondary_btn(top, "🔄 Revert", command=self._revert_overrides).pack(side="left", padx=2)
 
         # Cash Flow toggle — visible for COMPANY/SEC8 with small-co note
         et = self._doc.entity_type
         if et in ("COMPANY", "SEC8"):
             cf_frame = ttk.Frame(top)
-            cf_frame.pack(side="left", padx=12)
-            cb = ttk.Checkbutton(cf_frame, text="Include Cash Flow Statement",
+            cf_frame.pack(side="left", padx=6)
+            cb = ttk.Checkbutton(cf_frame, text="Cash Flow",
                                  variable=self._include_cf,
                                  command=self._on_cf_toggle,
                                  style="TCheckbutton")
             cb.pack(side="left")
             if self._is_small:
-                label(cf_frame, "(optional — small company)", style="Muted.TLabel").pack(side="left", padx=4)
-
-        primary_btn(top, "→ Generate Notes  F10", command=self._go_notes).pack(side="right", padx=4)
-        secondary_btn(top, "← Back to Annexures", command=self._back).pack(side="right", padx=4)
+                label(cf_frame, "(small co.)", style="Muted.TLabel").pack(side="left", padx=2)
 
         self._nb = ttk.Notebook(self)
         self._nb.pack(fill="both", expand=True, padx=8, pady=4)
