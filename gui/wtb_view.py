@@ -32,13 +32,13 @@ class WTBView(ttk.Frame):
                   style="Muted.TLabel").pack(fill="x", padx=8)
 
         cols = [
-            ("group",   "Group",            160, "w"),
-            ("heading", "Heading",          200, "w"),
-            ("ledger",  "Ledger Name",      220, "w"),
-            ("code",    "Code",              70, "center"),
-            ("cy",      "CY Net ₹",         120, "e"),
-            ("py",      "PY Net ₹",         120, "e"),
-            ("fs_tag",  "BS/PL/IE",          60, "center"),
+            ("group",   "Group",            160, "w",      120, False),
+            ("heading", "Heading",          200, "w",      150, False),
+            ("ledger",  "Ledger Name",      220, "w",      180, False),
+            ("code",    "Code",              70, "center",  60, False),
+            ("cy",      "CY Net ₹",         120, "e",      100, False),
+            ("py",      "PY Net ₹",         120, "e",      100, False),
+            ("fs_tag",  "BS/PL/IE",          60, "center",  50, False),
         ]
         self._grid = EditableGrid(self, columns=cols,
                                   on_cell_change=None,
@@ -58,17 +58,17 @@ class WTBView(ttk.Frame):
         tree_frame.pack(fill="x", expand=True, padx=6, pady=4)
 
         adj_cols = [
-            ("id", "Entry ID", 110, "w"),
-            ("ledger", "Ledger Name", 200, "w"),
-            ("code", "Code", 70, "center"),
-            ("dr", "Debit (₹)", 100, "e"),
-            ("cr", "Credit (₹)", 100, "e"),
-            ("narration", "Narration", 260, "w"),
+            ("id", "Entry ID", 110, "w",       90, False),
+            ("ledger", "Ledger Name", 200, "w", 150, False),
+            ("code", "Code", 70, "center",     60, False),
+            ("dr", "Debit (₹)", 100, "e",      80, False),
+            ("cr", "Credit (₹)", 100, "e",     80, False),
+            ("narration", "Narration", 260, "w", 160, False),
         ]
         self._adj_tree = ttk.Treeview(tree_frame, columns=[c[0] for c in adj_cols], show="headings", height=4)
-        for cid, chdr, cw, ca in adj_cols:
+        for cid, chdr, cw, ca, cmw, cst in adj_cols:
             self._adj_tree.heading(cid, text=chdr)
-            self._adj_tree.column(cid, width=cw, anchor=ca)
+            self._adj_tree.column(cid, width=cw, minwidth=cmw, anchor=ca, stretch=cst)
         adj_vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self._adj_tree.yview)
         self._adj_tree.configure(yscrollcommand=adj_vsb.set)
         self._adj_tree.pack(side="left", fill="x", expand=True)
