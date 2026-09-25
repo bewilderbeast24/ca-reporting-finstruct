@@ -104,10 +104,10 @@ class FSViewer(ttk.Frame):
 
     def _make_grid(self, parent, lines: list[FSLine], section: str) -> EditableGrid:
         cols = [
-            ("label", "Particulars",        420, "w"),
-            ("note",  "Note",                50, "center"),
-            ("cy",    "Current Year ₹",     140, "e"),
-            ("py",    "Previous Year ₹",    140, "e"),
+            ("label", "Particulars",        420, "w",      300, False),
+            ("note",  "Note",                50, "center",  40, False),
+            ("cy",    "Current Year ₹",     140, "e",      110, False),
+            ("py",    "Previous Year ₹",    140, "e",      110, False),
         ]
         grid = EditableGrid(parent, columns=cols,
                             on_cell_change=lambda iid, col, val:
