@@ -166,6 +166,27 @@ def label(parent, text: str, style: str = "TLabel", **kw) -> ttk.Label:
     return ttk.Label(parent, text=text, style=style, **kw)
 
 
+def ribbon(parent, *, padx: int = 8, pady: int = 6):
+    """Shared top ribbon: right nav packed first so it stays visible at 1024px.
+
+    Returns (bar, left, right). Put the title + actions in left,
+    navigation (Back / Proceed) in right.
+    """
+    bar = ttk.Frame(parent)
+    bar.pack(fill="x", padx=padx, pady=pady)
+    right = ttk.Frame(bar)
+    right.pack(side="right")
+    left = ttk.Frame(bar)
+    left.pack(side="left", fill="x", expand=True)
+    return bar, left, right
+
+
+def ribbon_sep(parent) -> ttk.Separator:
+    sep = ttk.Separator(parent, orient="vertical")
+    sep.pack(side="left", fill="y", padx=6)
+    return sep
+
+
 def entry(parent, textvariable=None, width: int = 30, **kw) -> ttk.Entry:
     return ttk.Entry(parent, textvariable=textvariable, width=width, **kw)
 
