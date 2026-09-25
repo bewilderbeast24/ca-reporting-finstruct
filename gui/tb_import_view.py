@@ -197,13 +197,13 @@ class TBImportView(ttk.Frame):
 
         # Preview grid
         cols = [
-            ("ledger", "Ledger Name",       220, "w"),
-            ("group",  "Group",             140, "w"),
-            ("dr",     "Debit",             100, "e"),
-            ("cr",     "Credit",            100, "e"),
-            ("net",    "Closing (CY)",      110, "e"),
-            ("py",     "PY Net",            110, "e"),
-            ("src",    "Source",             70, "center"),
+            ("ledger", "Ledger Name",       220, "w",      180, False),
+            ("group",  "Group",             140, "w",      100, False),
+            ("dr",     "Debit",             100, "e",       80, False),
+            ("cr",     "Credit",            100, "e",       80, False),
+            ("net",    "Closing (CY)",      110, "e",       90, False),
+            ("py",     "PY Net",            110, "e",       90, False),
+            ("src",    "Source",             70, "center",  60, False),
         ]
         from gui.fs_grid_view import EditableGrid
         self._grid = EditableGrid(self, columns=cols)
