@@ -7,7 +7,7 @@ from pathlib import Path
 from config import THEME as T
 from core.tb_importer import import_xlsx, import_csv, import_tally_xml
 from core.tb_template_generator import generate as generate_tb_template
-from gui.theme import primary_btn, secondary_btn, label
+from gui.theme import primary_btn, secondary_btn, label, ribbon
 
 
 class ColumnMappingDialog(tk.Toplevel):
@@ -160,8 +160,11 @@ class TBImportView(ttk.Frame):
         self._status_var.set(f"Showing {n} previously imported ledger(s). Browse a file to replace, or proceed to Mapping.")
 
     def _build(self):
-        top = ttk.Frame(self)
-        top.pack(fill="x", padx=8, pady=6)
+        _, top, nav = ribbon(self)
+        # Nav on top-right so Proceed stays visible without scrolling
+        primary_btn(nav, "✔ Confirm & Proceed  →", command=self._confirm).pack(side="right")
+        secondary_btn(nav, "Clear", command=self._clear).pack(side="right", padx=2)
+        secondary_btn(nav, "← Back", command=self._back).pack(side="right", padx=2)
         label(top, "2.  Import Trial Balance", style="Sec.TLabel").pack(side="left")
 
         # Template download bar (Zoho packed first on right so it stays visible)
@@ -209,14 +212,9 @@ class TBImportView(ttk.Frame):
         self._grid = EditableGrid(self, columns=cols)
         self._grid.pack(fill="both", expand=True, padx=8, pady=4)
 
-        # Bottom bar (nav first on right so Proceed stays visible at 1024px)
+        # Bottom count line (actions moved to top-right ribbon)
         bot = ttk.Frame(self)
-        bot.pack(fill="x", padx=8, pady=6)
-        bot_nav = ttk.Frame(bot)
-        bot_nav.pack(side="right")
-        primary_btn(bot_nav, "✔ Confirm & Proceed  →", command=self._confirm).pack(side="right")
-        secondary_btn(bot_nav, "Clear", command=self._clear).pack(side="right", padx=2)
-        secondary_btn(bot, "← Back", command=self._back).pack(side="left")
+        bot.pack(fill="x", padx=8, pady=(0, 6))
         self._count_var = tk.StringVar(value="")
         ttk.Label(bot, textvariable=self._count_var,
                   style="Muted.TLabel").pack(side="left", padx=8)
