@@ -8,7 +8,7 @@ from openpyxl import load_workbook
 from config import THEME as T, PPE_CATEGORIES
 from core.ppe_engine import recalc_asset, summarize_ppe
 from core.ppe_template_generator import generate_ppe_template
-from gui.theme import primary_btn, secondary_btn, label
+from gui.theme import primary_btn, secondary_btn, label, ribbon, ribbon_sep
 from gui.fs_grid_view import EditableGrid
 
 
@@ -83,30 +83,27 @@ class PPEView(ttk.Frame):
         self._load()
 
     def _build(self):
-        top = ttk.Frame(self)
-        top.pack(fill="x", padx=8, pady=6)
+        _, top, nav = ribbon(self)
+        # Navigation first so it stays visible at 1024px
+        primary_btn(nav, "Proceed to Annexures →", command=self._proceed).pack(side="right", padx=2)
+        secondary_btn(nav, "← Back to WTB", command=self._back).pack(side="right", padx=2)
+
         label(top, "5.  PPE / Fixed Asset Register", style="Sec.TLabel").pack(side="left")
 
         # Excel I/O group
-        secondary_btn(top, "📥  Download Template", command=self._download_template).pack(side="left", padx=4)
-        secondary_btn(top, "📥  Import from Excel", command=self._import_ppe).pack(side="left", padx=4)
+        secondary_btn(top, "📥 Template", command=self._download_template).pack(side="left", padx=2)
+        secondary_btn(top, "📥 Import Excel", command=self._import_ppe).pack(side="left", padx=2)
 
-        # Separator
-        ttk.Separator(top, orient="vertical").pack(side="left", fill="y", padx=8)
+        ribbon_sep(top)
 
         # Asset operations
-        primary_btn(top, "+ Add Asset", command=self._add_asset).pack(side="left", padx=4)
-        secondary_btn(top, "🗑 Delete Selected", command=self._delete_asset).pack(side="left", padx=4)
+        primary_btn(top, "+ Add Asset", command=self._add_asset).pack(side="left", padx=2)
+        secondary_btn(top, "🗑 Delete", command=self._delete_asset).pack(side="left", padx=2)
 
-        # Separator
-        ttk.Separator(top, orient="vertical").pack(side="left", fill="y", padx=8)
+        ribbon_sep(top)
 
         # Posting action
-        secondary_btn(top, "⚡ Post Depreciation to WTB", command=self._post_dep).pack(side="left", padx=4)
-
-        # Navigation
-        primary_btn(top, "Proceed to Annexures →", command=self._proceed).pack(side="right", padx=4)
-        secondary_btn(top, "← Back to WTB", command=self._back).pack(side="right", padx=4)
+        secondary_btn(top, "⚡ Post Dep to WTB", command=self._post_dep).pack(side="left", padx=2)
 
         cols = [
             ("asset",    "Asset Description",   200, "w",      150, False),
