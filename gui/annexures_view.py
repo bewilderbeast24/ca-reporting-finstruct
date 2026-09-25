@@ -59,11 +59,18 @@ class AnnexuresView(ttk.Frame):
             self._ann_combo.current(current_idx)
 
     def _build(self):
-        _, top, _ = ribbon(self)
+        _, top, nav = ribbon(self)
+        # Actions on top-right so Proceed stays visible without scrolling
+        primary_btn(nav, "Proceed to FS →", command=self._proceed).pack(side="right", padx=2)
+        primary_btn(nav, "💾 Save", command=self._save).pack(side="right", padx=2)
+        secondary_btn(nav, "📥 Import", command=self._import_excel).pack(side="right", padx=2)
+        secondary_btn(nav, "📋 Template", command=self._export_template).pack(side="right", padx=2)
         label(top, "5b.  Custom Annexures",
               style="Sec.TLabel").pack(side="left")
         label(top, "(Ageing, Share Capital, Borrowings)",
               style="Muted.TLabel").pack(side="left", padx=2)
+        secondary_btn(top, "← Back to PPE", command=self._back).pack(side="left", padx=2)
+        secondary_btn(top, "🔄 Reload TB total", command=self._reload_blank).pack(side="left", padx=2)
 
         # Tolerance config
         tol_frame = ttk.Frame(self)
@@ -133,20 +140,6 @@ class AnnexuresView(ttk.Frame):
         self._rows_frame.bind("<Configure>", lambda e: canvas.configure(
             scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda e: canvas.itemconfig(win, width=e.width))
-
-        # Save bar (nav first so Proceed stays visible at 1024px)
-        save_bar = ttk.Frame(self)
-        save_bar.pack(fill="x", padx=8, pady=6)
-        save_nav = ttk.Frame(save_bar)
-        save_nav.pack(side="right")
-        primary_btn(save_nav, "Proceed to FS →", command=self._proceed).pack(side="right", padx=2)
-        primary_btn(save_nav, "💾 Save", command=self._save).pack(side="right", padx=2)
-        secondary_btn(save_nav, "📥 Import", command=self._import_excel).pack(side="right", padx=2)
-        secondary_btn(save_nav, "📋 Template", command=self._export_template).pack(side="right", padx=2)
-        save_left = ttk.Frame(save_bar)
-        save_left.pack(side="left", fill="x", expand=True)
-        secondary_btn(save_left, "← Back to PPE", command=self._back).pack(side="left", padx=2)
-        secondary_btn(save_left, "🔄 Reload TB total", command=self._reload_blank).pack(side="left", padx=2)
 
         # Load default first annexure
         self._on_annexure_select()
