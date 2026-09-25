@@ -8,7 +8,7 @@ import threading
 from config import THEME as T
 from core.mapper import Mapper, CONF_GREEN, CONF_YELLOW
 from core.master_db import get_group_tree, get_lookup_map
-from gui.theme import primary_btn, secondary_btn, label
+from gui.theme import primary_btn, secondary_btn, label, ribbon, ribbon_sep
 
 
 def _norm_str(s: str) -> str:
@@ -35,20 +35,20 @@ class MappingView(ttk.Frame):
 
     # ── UI Build ─────────────────────────────────────────────────────────
     def _build(self):
-        top = ttk.Frame(self)
-        top.pack(fill="x", padx=8, pady=6)
+        _, top, nav = ribbon(self)
+        # Navigation first so it stays visible at 1024px
+        primary_btn(nav, "✔ Confirm & Proceed  F9", command=self._confirm_all).pack(side="right", padx=2)
+        secondary_btn(nav, "← Back to Import TB", command=self._back).pack(side="right", padx=2)
+
         label(top, "3.  Mapping Review", style="Sec.TLabel").pack(side="left")
-        primary_btn(top, "Auto-Map All", command=self._run_mapping).pack(side="left", padx=6)
-        secondary_btn(top, "AI Assist (unresolved)", command=self._run_ai_assist).pack(side="left", padx=4)
-        secondary_btn(top, "Confirm All Green", command=self._confirm_all_green).pack(side="left", padx=4)
+        primary_btn(top, "Auto-Map All", command=self._run_mapping).pack(side="left", padx=2)
+        secondary_btn(top, "AI Assist", command=self._run_ai_assist).pack(side="left", padx=2)
+        secondary_btn(top, "Confirm Green", command=self._confirm_all_green).pack(side="left", padx=2)
 
         # Bulk file operations
-        ttk.Separator(top, orient="vertical").pack(side="left", fill="y", padx=8)
-        secondary_btn(top, "📥 Download Template", command=self._download_template).pack(side="left", padx=4)
-        secondary_btn(top, "📥 Import Mapping", command=self._import_mapping).pack(side="left", padx=4)
-
-        primary_btn(top, "✔ Confirm & Proceed  F9", command=self._confirm_all).pack(side="right", padx=4)
-        secondary_btn(top, "← Back to Import TB", command=self._back).pack(side="right", padx=4)
+        ribbon_sep(top)
+        secondary_btn(top, "📥 Template", command=self._download_template).pack(side="left", padx=2)
+        secondary_btn(top, "📥 Import", command=self._import_mapping).pack(side="left", padx=2)
 
         # Search and Filter bar
         filter_bar = ttk.Frame(self)
