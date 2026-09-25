@@ -41,3 +41,38 @@ def test_column_mapping_dialog(tk_root):
     # Confirm
     dialog._confirm()
     assert dialog.result is not None
+
+def test_tb_import_view_loads_existing_tb(tk_root, mock_db):
+    mock_db.get_raw_tb.return_value = [
+        {"id": 1, "ledger_name": "Sales A/c", "group_name": "Sales", "cy_debit": 0, "cy_credit": 5000, "cy_net": 5000, "py_net": 4000, "source": "XLSX"}
+    ]
+    view = TBImportView(tk_root, mock_db)
+    assert "1 ledger(s) in database" in view._count_var.get()
+
+def test_tb_import_view_back_navigation(tk_root, mock_db):
+    back_cb = MagicMock()
+    view = TBImportView(tk_root, mock_db, on_back=back_cb)
+    view._back()
+    back_cb.assert_called_once()
+
+def test_tb_import_view_confirm_with_existing_tb(tk_root, mock_db):
+    mock_db.get_raw_tb.return_value = [
+        {"id": 1, "ledger_name": "Cash", "group_name": "Bank", "cy_debit": 100, "cy_credit": 0, "cy_net": 100, "py_net": 50, "source": "XLSX"}
+    ]
+    complete_cb = MagicMock()
+    view = TBImportView(tk_root, mock_db, on_complete=complete_cb)
+    view._confirm()
+    complete_cb.assert_called_once()
+
+def test_tb_import_view_loads_existing_tb_with_sqlite_rows(tk_root, tmp_path):
+    import sqlite3
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute("CREATE TABLE raw_tb (id INTEGER, ledger_name TEXT, group_name TEXT, cy_debit REAL, cy_credit REAL, cy_net REAL, py_net REAL, source TEXT)")
+    con.execute("INSERT INTO raw_tb VALUES (1, 'Cash', 'Asset', 100.0, 0.0, 100.0, 0.0, 'DB')")
+    mock_db = MagicMock()
+    mock_db.get_raw_tb.return_value = con.execute("SELECT * FROM raw_tb").fetchall()
+    view = TBImportView(tk_root, mock_db)
+    assert "1 ledger(s) in database" in view._count_var.get()
+    con.close()
+

@@ -27,8 +27,8 @@ class Dashboard(ttk.Frame):
         label(hdr, "FinStruct", style="Title.TLabel").pack(side="left")
         label(hdr, "Financial Statement Automation",
               style="Muted.TLabel").pack(side="left", padx=12)
-        primary_btn(hdr, "+ New Project", command=self._new_project).pack(side="right", padx=4)
-        secondary_btn(hdr, "Open .finstruct …", command=self._browse_open).pack(side="right", padx=4)
+        primary_btn(hdr, "+ New Project", command=self._new_project).pack(side="right", padx=2)
+        secondary_btn(hdr, "Open …", command=self._browse_open).pack(side="right", padx=2)
 
         ttk.Separator(self, orient="horizontal").pack(fill="x")
 
@@ -36,6 +36,16 @@ class Dashboard(ttk.Frame):
         self._recent_hdr = ttk.Frame(self)
         self._recent_hdr.pack(fill="x", padx=16, pady=(12, 4))
         label(self._recent_hdr, "Recent Projects", style="Sec.TLabel").pack(side="left")
+
+        # Search filter
+        search_frame = ttk.Frame(self._recent_hdr)
+        search_frame.pack(side="left", padx=16)
+        ttk.Label(search_frame, text="🔍", font=(T["font"], 10)).pack(side="left", padx=(0, 2))
+        self._search_var = tk.StringVar()
+        self._search_var.trace_add("write", lambda *_: self._refresh())
+        search_entry = ttk.Entry(search_frame, textvariable=self._search_var, width=22)
+        search_entry.pack(side="left")
+
         self._recent_actions = ttk.Frame(self._recent_hdr)
         self._recent_actions.pack(side="right")
 
@@ -48,11 +58,27 @@ class Dashboard(ttk.Frame):
         for w in self._recent_actions.winfo_children():
             w.destroy()
 
-        recent = self._sdb.get_recent(15)
+        self._selected_path = None
+        self._row_widgets = {}
+
+        recent = self._sdb.get_recent(50)
+        query = getattr(self, "_search_var", None)
+        query_str = query.get().strip().lower() if query else ""
+        if query_str:
+            recent = [
+                r for r in recent
+                if query_str in (r.get("entity_name") or "").lower()
+                or query_str in (r.get("entity_type") or "").lower()
+                or query_str in (r.get("fy") or "").lower()
+                or query_str in (r.get("path") or "").lower()
+            ]
+
         if not recent:
-            label(self._list_frame,
-                  "No recent projects. Click '+ New Project' to begin.",
-                  style="Muted.TLabel").pack(pady=20)
+            msg = "No matching projects found." if query_str else "No recent projects. Click '+ New Project' to begin."
+            label(self._list_frame, msg, style="Muted.TLabel").pack(pady=(20, 8))
+            if not query_str:
+                primary_btn(self._list_frame, "+ Create New Project",
+                            command=self._new_project).pack(pady=4)
             return
 
         # Custom scrollable grid for text wrapping
@@ -93,14 +119,16 @@ class Dashboard(ttk.Frame):
             
             self._row_widgets[path] = (bg, labels)
 
-        # Action buttons in header
+        # Action buttons in header with explicit open, list removal, and separated danger deletion
+        primary_btn(self._recent_actions, "Open Selected Project",
+                    command=self._open_selected).pack(side="left", padx=4)
         secondary_btn(self._recent_actions, "Remove from list",
-                      command=self._remove_recent).pack(side="right")
-        tk.Button(self._recent_actions, text="Delete from list",
+                      command=self._remove_recent).pack(side="left", padx=4)
+        tk.Button(self._recent_actions, text="🗑 Delete Project from Disk",
                   command=self._delete_from_disk,
-                  bg=T["bg_white"], fg=T["error"], relief="flat",
+                  bg=T["bg_white"], fg=T["error"], relief="solid", bd=1,
                   font=(T["font"], T["font_size"]),
-                  padx=8, pady=2, cursor="hand2").pack(side="right", padx=8)
+                  padx=8, pady=2, cursor="hand2").pack(side="left", padx=8)
 
     def _select_recent(self, path):
         self._selected_path = path
@@ -110,6 +138,12 @@ class Dashboard(ttk.Frame):
             fg = T["primary"] if is_sel else T["text"]
             for l in labels:
                 l.configure(bg=bg, fg=fg)
+
+    def _open_selected(self):
+        if not self._selected_path:
+            messagebox.showinfo("Select Project", "Please select a project from the list first.")
+            return
+        self._open_path(self._selected_path)
 
     def _open_path(self, path: str):
         if not Path(path).exists():
@@ -128,27 +162,37 @@ class Dashboard(ttk.Frame):
             self._on_open(Path(path))
 
     def _remove_recent(self):
-        if self._selected_path:
-            self._sdb.remove_recent(self._selected_path)
-            self._refresh()
+        if not self._selected_path:
+            messagebox.showinfo("Select Project", "Please select a project from the list to remove.")
+            return
+        self._sdb.remove_recent(self._selected_path)
+        self._selected_path = None
+        self._refresh()
 
     def _delete_from_disk(self):
         if not self._selected_path:
+            messagebox.showinfo("Select Project", "Please select a project from the list to delete.")
             return
         
         path = Path(self._selected_path)
         folder = path.parent
         
-        msg = f"ARE YOU SURE?\n\nThis will PERMANENTLY DELETE the entire project folder and all its contents:\n\n{folder}\n\nThis action cannot be undone."
+        msg = (
+            f"PERMANENT DELETION WARNING:\n\n"
+            f"Are you sure you want to permanently delete this project and ALL its files from disk?\n\n"
+            f"Folder: {folder}\n\n"
+            f"This action CANNOT be undone."
+        )
         if messagebox.askyesno("Confirm Permanent Deletion", msg, icon='warning'):
             try:
                 import shutil
                 # Check if path exists before attempting deletion
                 if folder.exists() and folder.is_dir():
                     shutil.rmtree(folder)
-                    messagebox.showinfo("Deleted", "Project folder deleted from disk.")
+                    messagebox.showinfo("Deleted", f"Project folder deleted from disk:\n{folder}")
                 
                 self._sdb.remove_recent(self._selected_path)
+                self._selected_path = None
                 self._refresh()
             except Exception as e:
                 messagebox.showerror("Error", f"Could not delete folder. It might be in use.\n\n{e}")

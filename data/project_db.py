@@ -350,6 +350,10 @@ class ProjectDB:
     def get_raw_tb(self) -> list[sqlite3.Row]:
         return self._conn.execute("SELECT * FROM raw_tb ORDER BY id").fetchall()
 
+    def update_raw_tb_group(self, raw_tb_id: int, group_name: str):
+        with self._tx():
+            self._conn.execute("UPDATE raw_tb SET group_name=? WHERE id=?", (group_name, raw_tb_id))
+
     # ── WTB ──────────────────────────────────────────────────────────────
     def upsert_wtb(self, raw_tb_id: int, mapping_code: str, confidence: float,
                    source: str, cy_net: float, py_net: float, confirmed: int = 0):
@@ -414,6 +418,14 @@ class ProjectDB:
                 "DELETE FROM adjustments WHERE adj_id LIKE 'DEP-%'"
             )
 
+    def delete_adjustment(self, adj_db_id):
+        """Delete an adjustment entry by its database id or adj_id."""
+        with self._tx():
+            if isinstance(adj_db_id, int) or str(adj_db_id).isdigit():
+                self._conn.execute("DELETE FROM adjustments WHERE id=?", (int(adj_db_id),))
+            else:
+                self._conn.execute("DELETE FROM adjustments WHERE adj_id=?", (str(adj_db_id),))
+
     # ── PPE ──────────────────────────────────────────────────────────────
     def upsert_ppe(self, asset: dict):
         with self._tx():
@@ -464,6 +476,13 @@ class ProjectDB:
             "SELECT line_code,cy_value,py_value FROM fs_overrides WHERE section=?", (section,)
         ).fetchall()
         return {r[0]: (r[1], r[2]) for r in rows}
+
+    def clear_overrides(self, section: str = None):
+        with self._tx():
+            if section:
+                self._conn.execute("DELETE FROM fs_overrides WHERE section=?", (section,))
+            else:
+                self._conn.execute("DELETE FROM fs_overrides")
 
     # ── Notes ────────────────────────────────────────────────────────────
     def get_note_data(self, note_no: int) -> dict[int, dict]:

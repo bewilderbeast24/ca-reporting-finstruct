@@ -149,38 +149,62 @@ class FSEngine:
                 ordered_headings[e.group].append(e.heading)
             groups[e.group][e.heading].append(e)
 
-        # 3. Render Tree
-        for group_name in ordered_groups:
-            lines.append(_sec(group_name))
-            group_cy, group_py = 0.0, 0.0
-            
-            for head_name in ordered_headings[group_name]:
-                entries = groups[group_name][head_name]
+        def _render_groups(group_list: list[str]) -> tuple[float, float]:
+            tot_cy, tot_py = 0.0, 0.0
+            for group_name in group_list:
+                lines.append(_sec(group_name))
+                group_cy, group_py = 0.0, 0.0
                 
-                # Sum entries in this heading
-                head_cy = sum(self._cy(e.code) for e in entries)
-                head_py = sum(self._py(e.code) for e in entries)
+                for head_name in ordered_headings[group_name]:
+                    entries = groups[group_name][head_name]
+                    
+                    # Sum entries in this heading
+                    head_cy = sum(self._cy(e.code) for e in entries)
+                    head_py = sum(self._py(e.code) for e in entries)
+                    
+                    if fs_tag == "BS" and head_name in ("Reserves & Surplus", "Corpus Fund"):
+                        pat_cy_raw = sum(v[0] for k, v in self._totals.items() if (self._lookup.get(k) and self._lookup.get(k).fs_tag in ("PL", "IE")) or k.startswith("CO_IN") or k.startswith("CO_EX"))
+                        pat_py_raw = sum(v[1] for k, v in self._totals.items() if (self._lookup.get(k) and self._lookup.get(k).fs_tag in ("PL", "IE")) or k.startswith("CO_IN") or k.startswith("CO_EX"))
+                        head_cy += _r(pat_cy_raw, self._div)
+                        head_py += _r(pat_py_raw, self._div)
+
+                    # Use note number from first entry if available
+                    note = next((e.note_number for e in entries if e.note_number), None)
+                    
+                    lines.append(_line(f"    {head_name}", head_cy, head_py, note=note, indent=1))
+                    
+                    group_cy += head_cy
+                    group_py += head_py
                 
-                # Use note number from first entry if available
-                note = next((e.note_number for e in entries if e.note_number), None)
-                
-                lines.append(_line(f"    {head_name}", head_cy, head_py, note=note, indent=1))
-                
-                group_cy += head_cy
-                group_py += head_py
-            
-            lines.append(_tot(f"Sub-total — {group_name}", group_cy, group_py))
+                lines.append(_tot(f"Sub-total — {group_name}", group_cy, group_py))
+                lines.append(_blank())
+                tot_cy += group_cy
+                tot_py += group_py
+            return tot_cy, tot_py
+
+        if fs_tag == "BS":
+            # Separate groups into Equity & Liabilities vs Assets
+            is_asset = lambda g: any(k in g.lower() for k in ["asset", "invest"])
+            liab_groups = [g for g in ordered_groups if not is_asset(g)]
+            asset_groups = [g for g in ordered_groups if is_asset(g)]
+
+            # ── EQUITY & LIABILITIES ──
+            sec_el_label = "I.  EQUITY AND LIABILITIES" if self._etype in ("COMPANY", "SEC8") else "I.  FUNDS AND LIABILITIES"
+            lines.append(_sec(sec_el_label))
+            liab_cy, liab_py = _render_groups(liab_groups)
+            total_el_label = "TOTAL — EQUITY AND LIABILITIES" if self._etype in ("COMPANY", "SEC8") else "TOTAL — FUNDS & LIABILITIES"
+            lines.append(_grand(total_el_label, round(liab_cy, 2), round(liab_py, 2)))
             lines.append(_blank())
 
-        # 4. Grand Total
-        total_cy = sum(line.cy for line in lines if line.row_type == "TOTAL")
-        total_py = sum(line.py for line in lines if line.row_type == "TOTAL")
-        
-        # In BS, we often have two Grand Totals (Equity/Liab and Assets)
-        # For now, we'll just put a single Grand Total at the bottom
-        # unless it's a specific report type we want to handle specially.
-        lines.append(_grand("TOTAL", total_cy, total_py))
-        
+            # ── ASSETS ──
+            lines.append(_sec("II.  ASSETS"))
+            asset_cy, asset_py = _render_groups(asset_groups)
+            lines.append(_grand("TOTAL — ASSETS", round(asset_cy, 2), round(asset_py, 2)))
+            return lines
+
+        # 3. Render Tree (for non-BS reports: PL, IE, RP)
+        tot_cy, tot_py = _render_groups(ordered_groups)
+        lines.append(_grand("TOTAL", round(tot_cy, 2), round(tot_py, 2)))
         return lines
 
     def generate(self, include_cf: bool = True) -> FSDocument:
@@ -218,12 +242,19 @@ class FSEngine:
         tot_a = 0.0
         for line in doc.bs:
             label_up = line.label.upper()
-            if "TOTAL" in label_up or line.row_type == "GRAND":
-                # Heuristic: the last GRAND/TOTAL for each side
+            if line.row_type == "GRAND":
                 if "ASSET" in label_up:
                     tot_a = line.cy
                 elif any(kw in label_up for kw in ["LIABILIT", "EQUITY", "FUNDS"]):
                     tot_l = line.cy
+        if tot_l == 0.0 and tot_a == 0.0:
+            for line in doc.bs:
+                label_up = line.label.upper()
+                if "TOTAL" in label_up:
+                    if "ASSET" in label_up:
+                        tot_a = line.cy
+                    elif any(kw in label_up for kw in ["LIABILIT", "EQUITY", "FUNDS"]):
+                        tot_l = line.cy
         
         diff = round(tot_l - tot_a, 2)
         if abs(diff) > 0.5:

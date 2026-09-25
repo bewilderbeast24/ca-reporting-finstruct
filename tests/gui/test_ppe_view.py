@@ -44,3 +44,23 @@ def test_ppe_view_post_dep(mock_msgbox, tk_root, mock_db):
     
     # 2 for tangible, 2 for intangible
     assert db.add_adjustment.call_count == 4
+
+def test_ppe_view_navigation(tk_root, mock_db):
+    proceed_cb = MagicMock()
+    back_cb = MagicMock()
+    view = PPEView(tk_root, mock_db, on_proceed=proceed_cb, on_back=back_cb)
+    view._proceed()
+    proceed_cb.assert_called_once()
+    view._back()
+    back_cb.assert_called_once()
+
+def test_add_asset_dialog(tk_root):
+    from gui.ppe_view import AddAssetDialog
+    on_add = MagicMock()
+    dlg = AddAssetDialog(tk_root, on_add)
+    dlg._name_var.set("Office Printer")
+    dlg._life_var.set("5")
+    dlg._gross_var.set("25000")
+    dlg._save()
+    on_add.assert_called_once()
+    assert on_add.call_args[0][0]["asset_name"] == "Office Printer"

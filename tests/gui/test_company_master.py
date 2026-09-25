@@ -32,7 +32,23 @@ def test_company_master_form_save_success(mock_msgbox, tk_root, mock_db):
     form = CompanyMasterForm(tk_root, mock_db)
     form._vars["entity_name"].set("Valid Co")
     form._vars["financial_year"].set("2024-25")
-    form._save()
+    res = form._save()
+    assert res is True
     
     mock_db.save_entity_batch.assert_called_once()
     mock_msgbox.showinfo.assert_called_once()
+
+@patch('gui.company_master.messagebox')
+def test_company_master_form_save_and_next(mock_msgbox, tk_root, mock_db):
+    proceed_cb = MagicMock()
+    form = CompanyMasterForm(tk_root, mock_db, on_proceed=proceed_cb)
+    form._vars["entity_name"].set("Valid Co")
+    form._vars["financial_year"].set("2024-25")
+    form._save_and_next()
+    proceed_cb.assert_called_once()
+
+@patch('gui.company_master.messagebox')
+def test_company_master_form_dir_remove_no_selection(mock_msgbox, tk_root, mock_db):
+    form = CompanyMasterForm(tk_root, mock_db)
+    form._dir_remove()
+    mock_msgbox.showinfo.assert_called_with("Select", "Select a director to remove.")

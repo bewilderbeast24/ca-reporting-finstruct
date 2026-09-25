@@ -156,6 +156,10 @@ def test_raw_tb_operations(project_db):
     assert tb[0]["ledger_name"] == "Cash"
     assert tb[1]["cy_net"] == -200
     
+    project_db.update_raw_tb_group(tb[0]["id"], "Current Assets > Bank")
+    updated_tb = project_db.get_raw_tb()
+    assert updated_tb[0]["group_name"] == "Current Assets > Bank"
+    
     project_db.clear_raw_tb()
     assert len(project_db.get_raw_tb()) == 0
     # clearing raw tb also clears wtb
@@ -233,6 +237,13 @@ def test_fs_overrides_operations(project_db):
     assert overrides["SHARE_CAP"] == (5000, 4000)
     assert overrides["RES_SURP"] == (2000, 1500)
     
+    assert len(project_db.get_overrides("PL")) == 0
+
+    project_db.clear_overrides("BS")
+    assert len(project_db.get_overrides("BS")) == 0
+
+    project_db.set_override("PL", "REV", 100, 80)
+    project_db.clear_overrides()
     assert len(project_db.get_overrides("PL")) == 0
 
 def test_note_data_operations(project_db):

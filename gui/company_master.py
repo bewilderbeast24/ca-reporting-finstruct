@@ -10,10 +10,11 @@ from core.validator import validate_cin, validate_fy, validate_pan
 
 
 class CompanyMasterForm(ttk.Frame):
-    def __init__(self, parent, db, on_save: callable = None):
+    def __init__(self, parent, db, on_save: callable = None, on_proceed: callable = None):
         super().__init__(parent)
         self._db    = db
         self._on_save = on_save
+        self._on_proceed = on_proceed
         self._vars: dict[str, tk.StringVar] = {}
         self.configure(style="TFrame")
         self._build()
@@ -66,17 +67,17 @@ class CompanyMasterForm(ttk.Frame):
         r += 1
         self._field(inner, r, "entity_name", "Entity / Company Name", required=True); r += 1
         self._field(inner, r, "financial_year", "Financial Year (YYYY-YY)", required=True); r += 1
-        self._field(inner, r, "pan", "PAN"); r += 1
+        self._field(inner, r, "pan", "PAN (e.g. ABCDE1234F)"); r += 1
         self._field(inner, r, "address", "Registered / Principal Office", width=50); r += 1
 
         if entity_type == "COMPANY":
             self._field(inner, r, "cin",  "CIN (21 chars)"); r += 1
-            self._field(inner, r, "date_of_incorp", "Date of Incorporation"); r += 1
+            self._field(inner, r, "date_of_incorp", "Date of Incorporation (DD-Mon-YYYY)"); r += 1
             self._combo(inner, r, "entity_subtype", "Company Subtype",
                         ["Regular Company", "Small Company", "OPC", "Dormant"]); r += 1
         elif entity_type == "LLP":
             self._field(inner, r, "llpin", "LLPIN"); r += 1
-            self._field(inner, r, "date_of_reg", "Date of Registration"); r += 1
+            self._field(inner, r, "date_of_reg", "Date of Registration (DD-Mon-YYYY)"); r += 1
         elif entity_type in ("PROP",):
             self._field(inner, r, "prop_name", "Proprietor Name"); r += 1
         elif entity_type == "PART":
@@ -91,7 +92,7 @@ class CompanyMasterForm(ttk.Frame):
             self._field(inner, r, "secretary_name", "Honorary Secretary"); r += 1
             self._field(inner, r, "treasurer_name", "Treasurer"); r += 1
         elif entity_type in ("TRUST", "SEC8"):
-            self._field(inner, r, "trust_deed_date", "Trust Deed / Reg Date"); r += 1
+            self._field(inner, r, "trust_deed_date", "Trust Deed / Reg Date (DD-Mon-YYYY)"); r += 1
             self._field(inner, r, "reg_no", "Registration No."); r += 1
 
         ttk.Separator(inner, orient="horizontal").grid(
@@ -129,6 +130,7 @@ class CompanyMasterForm(ttk.Frame):
                                    command=self._dir_tree.yview)
             self._dir_tree.configure(yscrollcommand=dir_sb.set)
             dir_sb.pack(side="left", fill="y")
+            self._dir_tree.bind("<Double-Button-1>", lambda e: self._dir_edit())
 
             dir_btns = ttk.Frame(inner)
             dir_btns.grid(row=r, column=0, columnspan=2, sticky="w", padx=6, pady=(0,4))
@@ -157,11 +159,12 @@ class CompanyMasterForm(ttk.Frame):
         self._field(inner, r, "signing_date",    "Signing Date (DD-Mon-YYYY)"); r += 1
         r += 1
 
-        # ── Buttons ──────────────────────────────────────────────────────
+        # ── Buttons (proceed on right so it stays visible at 1024px) ───
         btn_frame = ttk.Frame(inner)
         btn_frame.grid(row=r, column=0, columnspan=2, sticky="ew", padx=6, pady=10)
-        primary_btn(btn_frame, "💾  Save", command=self._save).pack(side="left", padx=4)
-        secondary_btn(btn_frame, "↺  Reset", command=self._load).pack(side="left", padx=4)
+        primary_btn(btn_frame, "Save & Next →", command=self._save_and_next).pack(side="right", padx=2)
+        secondary_btn(btn_frame, "💾  Save", command=self._save).pack(side="left", padx=2)
+        secondary_btn(btn_frame, "↺  Reset", command=self._load).pack(side="left", padx=2)
 
         inner.columnconfigure(1, weight=1)
 
@@ -171,7 +174,7 @@ class CompanyMasterForm(ttk.Frame):
             var.set(data.get(key, ""))
         self._load_directors()
 
-    def _save(self):
+    def _save(self) -> bool:
         data = {k: v.get().strip() for k, v in self._vars.items()}
 
         errors = []
@@ -186,7 +189,7 @@ class CompanyMasterForm(ttk.Frame):
 
         if errors:
             messagebox.showerror("Validation Error", "\n".join(errors))
-            return
+            return False
 
         self._db.save_entity_batch(data)
         if data.get("financial_year"):
@@ -195,6 +198,12 @@ class CompanyMasterForm(ttk.Frame):
         messagebox.showinfo("Saved", "Entity master saved successfully.")
         if self._on_save:
             self._on_save(data)
+        return True
+
+    def _save_and_next(self):
+        if self._save():
+            if self._on_proceed:
+                self._on_proceed()
 
     def _load_directors(self):
         if not hasattr(self, '_dir_tree'):
@@ -216,7 +225,6 @@ class CompanyMasterForm(ttk.Frame):
     def _dir_edit(self):
         sel = self._dir_tree.selection()
         if not sel:
-            from tkinter import messagebox
             messagebox.showinfo("Select", "Select a director to edit.")
             return
         dir_id = int(sel[0])
@@ -228,8 +236,8 @@ class CompanyMasterForm(ttk.Frame):
     def _dir_remove(self):
         sel = self._dir_tree.selection()
         if not sel:
+            messagebox.showinfo("Select", "Select a director to remove.")
             return
-        from tkinter import messagebox
         if messagebox.askyesno("Remove", "Remove selected director?"):
             self._db.delete_director(int(sel[0]))
             self._load_directors()

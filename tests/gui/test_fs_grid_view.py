@@ -48,3 +48,19 @@ def test_editable_grid_start_cancel_edit(tk_root):
     
     grid._cancel_edit()
     assert grid._edit_entry is None
+
+def test_editable_grid_custom_column_width_and_stretch(tk_root):
+    cols = [
+        ("col1", "Column 1", 150, "w", 100, False),
+        ("col2", "Column 2", 250, "e", 180, False)
+    ]
+    grid = EditableGrid(tk_root, cols)
+    c1_info = grid.tree.column("col1")
+    c2_info = grid.tree.column("col2")
+    assert c1_info["width"] == 150
+    assert c1_info["minwidth"] == 100
+    assert c1_info["stretch"] == 0
+    assert c2_info["width"] == 250
+    assert c2_info["minwidth"] == 180
+    assert c2_info["stretch"] == 0
+

@@ -45,6 +45,22 @@ def test_dashboard_remove_recent(tk_root, mock_sdb):
     dash._remove_recent()
     mock_sdb.remove_recent.assert_called_with("/mock/path1.finstruct")
 
+@patch('gui.dashboard.Path.exists', return_value=True)
+def test_dashboard_open_selected(mock_exists, tk_root, mock_sdb):
+    open_cb = MagicMock()
+    dash = Dashboard(tk_root, mock_sdb, open_cb)
+    dash._selected_path = "/mock/path1.finstruct"
+    dash._open_selected()
+    open_cb.assert_called_once()
+    assert open_cb.call_args[0][0].name == "path1.finstruct"
+
+def test_dashboard_search_filter(tk_root, mock_sdb):
+    dash = Dashboard(tk_root, mock_sdb, MagicMock())
+    dash._search_var.set("Nonexistent")
+    assert len(dash._row_widgets) == 0
+    dash._search_var.set("Entity 1")
+    assert "/mock/path1.finstruct" in dash._row_widgets
+
 @patch('gui.dashboard.messagebox')
 def test_new_project_dialog(mock_msgbox, tk_root, mock_sdb):
     create_cb = MagicMock()
@@ -55,3 +71,15 @@ def test_new_project_dialog(mock_msgbox, tk_root, mock_sdb):
     
     dialog._create()
     create_cb.assert_called_once()
+
+def test_dashboard_empty_state(tk_root):
+    db = MagicMock()
+    db.get_recent.return_value = []
+    dash = Dashboard(tk_root, db, MagicMock())
+    # Should have a label and a button in _list_frame
+    children = dash._list_frame.winfo_children()
+    assert len(children) == 2
+    # Verify button exists and calls _new_project
+    btn = children[1]
+    assert btn.cget("text") == "+ Create New Project"
+

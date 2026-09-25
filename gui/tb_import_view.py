@@ -7,7 +7,7 @@ from pathlib import Path
 from config import THEME as T
 from core.tb_importer import import_xlsx, import_csv, import_tally_xml
 from core.tb_template_generator import generate as generate_tb_template
-from gui.theme import primary_btn, secondary_btn, label
+from gui.theme import primary_btn, secondary_btn, label, ribbon
 
 
 class ColumnMappingDialog(tk.Toplevel):
@@ -118,39 +118,75 @@ class ColumnMappingDialog(tk.Toplevel):
 
 
 class TBImportView(ttk.Frame):
-    def __init__(self, parent, db, on_complete: callable = None):
+    def __init__(self, parent, db, on_complete: callable = None, on_back: callable = None):
         super().__init__(parent)
         self._db          = db
         self._on_complete = on_complete
+        self._on_back     = on_back
         self._import_result = None
         self._path: Path | None = None
         self._build()
+        self._load_existing_tb()
+
+    def _load_existing_tb(self):
+        if not self._db:
+            return
+        try:
+            raw_rows = self._db.get_raw_tb()
+        except Exception:
+            return
+        if not raw_rows:
+            return
+        grid_rows = []
+        for i, row in enumerate(raw_rows):
+            r = dict(row) if hasattr(row, "keys") else row
+            cy_dr = f"{r['cy_debit']:,.2f}" if r.get("cy_debit") else "—"
+            cy_cr = f"{r['cy_credit']:,.2f}" if r.get("cy_credit") else "—"
+            cy_net = f"{r['cy_net']:,.2f}" if r.get("cy_net") else "—"
+            py_net = f"{r['py_net']:,.2f}" if r.get("py_net") else "—"
+            grid_rows.append({
+                "iid": str(r.get("id", i)),
+                "tag": "alt" if i % 2 else "",
+                "values": [
+                    r.get("ledger_name", ""),
+                    r.get("group_name", "") or "",
+                    cy_dr, cy_cr, cy_net, py_net,
+                    r.get("source", "DB"),
+                ],
+            })
+        self._grid.load_rows(grid_rows)
+        n = len(raw_rows)
+        self._count_var.set(f"{n} ledger(s) in database")
+        self._status_var.set(f"Showing {n} previously imported ledger(s). Browse a file to replace, or proceed to Mapping.")
 
     def _build(self):
-        top = ttk.Frame(self)
-        top.pack(fill="x", padx=8, pady=6)
+        _, top, nav = ribbon(self)
+        # Nav on top-right so Proceed stays visible without scrolling
+        primary_btn(nav, "✔ Confirm & Proceed  →", command=self._confirm).pack(side="right")
+        secondary_btn(nav, "Clear", command=self._clear).pack(side="right", padx=2)
+        secondary_btn(nav, "← Back", command=self._back).pack(side="right", padx=2)
         label(top, "2.  Import Trial Balance", style="Sec.TLabel").pack(side="left")
 
-        # Template download bar
+        # Template download bar (Zoho packed first on right so it stays visible)
         tmpl = ttk.Frame(self)
         tmpl.pack(fill="x", padx=8, pady=(4, 0))
-        label(tmpl, "No TB file yet?").pack(side="left", padx=4)
-        secondary_btn(tmpl, "📥  Download TB Template for this entity",
-                      command=self._download_template).pack(side="left", padx=4)
+        secondary_btn(tmpl, "🔗 Zoho Books",
+                      command=self._zoho_connect).pack(side="right", padx=2)
+        label(tmpl, "No TB file yet?").pack(side="left", padx=2)
+        secondary_btn(tmpl, "📥 TB Template",
+                      command=self._download_template).pack(side="left", padx=2)
         label(tmpl, "Fill in Excel, then import back here.",
-              style="Muted.TLabel").pack(side="left", padx=6)
-        secondary_btn(tmpl, "🔗  Connect Zoho Books",
-                      command=self._zoho_connect).pack(side="right", padx=4)
+               style="Muted.TLabel").pack(side="left", padx=4)
 
         # File picker
         pick = ttk.Frame(self)
         pick.pack(fill="x", padx=8, pady=4)
-        label(pick, "Source File:").pack(side="left", padx=4)
+        label(pick, "Source File:").pack(side="left", padx=2)
         self._path_var = tk.StringVar()
         ttk.Entry(pick, textvariable=self._path_var, width=50,
-                  state="readonly").pack(side="left", padx=4)
-        secondary_btn(pick, "Browse …", command=self._browse).pack(side="left", padx=4)
-        primary_btn(pick, "Import", command=self._do_import).pack(side="left", padx=8)
+                  state="readonly").pack(side="left", padx=2)
+        secondary_btn(pick, "Browse …", command=self._browse).pack(side="left", padx=2)
+        primary_btn(pick, "Import", command=self._do_import).pack(side="left", padx=4)
 
         # Status
         self._status_var = tk.StringVar(value="Select a file to import Trial Balance data.")
@@ -164,26 +200,28 @@ class TBImportView(ttk.Frame):
 
         # Preview grid
         cols = [
-            ("ledger", "Ledger Name",       220, "w"),
-            ("group",  "Group",             140, "w"),
-            ("dr",     "Debit",             100, "e"),
-            ("cr",     "Credit",            100, "e"),
-            ("net",    "Closing (CY)",      110, "e"),
-            ("py",     "PY Net",            110, "e"),
-            ("src",    "Source",             70, "center"),
+            ("ledger", "Ledger Name",       220, "w",      180, False),
+            ("group",  "Group",             140, "w",      100, False),
+            ("dr",     "Debit",             100, "e",       80, False),
+            ("cr",     "Credit",            100, "e",       80, False),
+            ("net",    "Closing (CY)",      110, "e",       90, False),
+            ("py",     "PY Net",            110, "e",       90, False),
+            ("src",    "Source",             70, "center",  60, False),
         ]
         from gui.fs_grid_view import EditableGrid
         self._grid = EditableGrid(self, columns=cols)
         self._grid.pack(fill="both", expand=True, padx=8, pady=4)
 
-        # Bottom bar
+        # Bottom count line (actions moved to top-right ribbon)
         bot = ttk.Frame(self)
-        bot.pack(fill="x", padx=8, pady=6)
+        bot.pack(fill="x", padx=8, pady=(0, 6))
         self._count_var = tk.StringVar(value="")
         ttk.Label(bot, textvariable=self._count_var,
-                  style="Muted.TLabel").pack(side="left")
-        primary_btn(bot, "✔ Confirm & Proceed  →", command=self._confirm).pack(side="right")
-        secondary_btn(bot, "Clear / Re-import", command=self._clear).pack(side="right", padx=6)
+                  style="Muted.TLabel").pack(side="left", padx=8)
+
+    def _back(self):
+        if self._on_back:
+            self._on_back()
 
     def _download_template(self):
         entity_type = "COMPANY"
@@ -237,6 +275,7 @@ class TBImportView(ttk.Frame):
         if path:
             self._path_var.set(path)
             self._path = Path(path)
+            self._status_var.set(f"Selected '{self._path.name}'. Click 'Import' to preview or 'Confirm & Proceed'.")
 
     def _do_import(self):
         if not self._path or not self._path.exists():
@@ -354,8 +393,16 @@ class TBImportView(ttk.Frame):
 
     def _confirm(self):
         if not self._import_result or not self._import_result.rows:
-            messagebox.showerror("No Data", "No data to import. Please import a file first.")
-            return
+            if self._path and self._path.exists():
+                self._do_import()
+            if not self._import_result or not self._import_result.rows:
+                raw_rows = self._db.get_raw_tb()
+                if raw_rows:
+                    if self._on_complete:
+                        self._on_complete()
+                    return
+                messagebox.showerror("No Data", "No data to import. Please import a file first.")
+                return
         if self._import_result.errors:
             if not messagebox.askyesno("Errors", "Import has errors. Proceed anyway?"):
                 return

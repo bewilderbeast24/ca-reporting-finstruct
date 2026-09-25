@@ -24,7 +24,7 @@ class ExportDialog(tk.Toplevel):
         self._db     = db
         self._rtexts = report_texts or {}
         self.title("Export Financial Statements")
-        self.geometry("520x400")
+        self.geometry("540x440")
         self.resizable(False, False)
         self.grab_set()
         self.configure(bg=T["bg"])
@@ -178,23 +178,26 @@ class ExportDialog(tk.Toplevel):
             name = _safe_name(em.get("entity_name", em.get("Company_Name", "Entity")))
             stem = f"{name}_{fy}"
             is_draft = self._is_draft.get()
+            pdf_path = folder / f"{stem}_FS.pdf" if self._do_pdf.get() else None
+            xlsx_path = folder / f"{stem}_FS.xlsx" if self._do_xlsx.get() else None
+            docx_path = folder / f"{stem}_Reports.docx" if self._do_docx.get() else None
 
-            if self._do_pdf.get():
+            if pdf_path:
                 self.after(0, lambda: self._status_var.set("Generating PDF …"))
                 from export.pdf_exporter import export_pdf
-                export_pdf(doc, notes, folder / f"{stem}_FS.pdf",
+                export_pdf(doc, notes, pdf_path,
                            is_draft=is_draft, db=self._db)
 
-            if self._do_xlsx.get():
+            if xlsx_path:
                 self.after(0, lambda: self._status_var.set("Generating XLSX …"))
                 from export.xlsx_exporter import export_xlsx
-                export_xlsx(doc, notes, folder / f"{stem}_FS.xlsx")
+                export_xlsx(doc, notes, xlsx_path)
 
-            if self._do_docx.get():
+            if docx_path:
                 self.after(0, lambda: self._status_var.set("Generating DOCX …"))
                 from export.docx_exporter import export_docx
                 export_docx(
-                    em, folder / f"{stem}_Reports.docx",
+                    em, docx_path,
                     directors_report_text=self._rtexts.get("directors"),
                     audit_report_text=self._rtexts.get("audit"),
                 )
@@ -202,9 +205,7 @@ class ExportDialog(tk.Toplevel):
             self._db.log("EXPORTED", f"{stem} → {folder}")
             self.after(0, lambda: self._status_var.set(f"✅ Done → {folder}"))
             self.after(0, self._prog.stop)
-            self.after(200, lambda: messagebox.showinfo(
-                "Export Complete",
-                f"✅ Files saved to:\n{folder}"))
+            self.after(100, lambda: self._on_export_success(folder, pdf_path, xlsx_path, docx_path))
 
         except Exception as e:
             import traceback
@@ -212,3 +213,35 @@ class ExportDialog(tk.Toplevel):
             self.after(0, lambda: self._status_var.set(f"Error: {e}"))
             self.after(0, lambda: messagebox.showerror("Export Error",
                 f"Export failed:\n{e}\n\n{traceback.format_exc()[-600:]}"))
+
+    def _open_path(self, path: Path):
+        import os, subprocess, platform
+        try:
+            if platform.system() == "Windows":
+                os.startfile(str(path))
+            elif platform.system() == "Darwin":
+                subprocess.run(["open", str(path)])
+            else:
+                subprocess.run(["xdg-open", str(path)])
+        except Exception as e:
+            messagebox.showerror("Cannot Open", f"Could not open {path}:\n{e}")
+
+    def _on_export_success(self, folder: Path, pdf_path: Path | None, xlsx_path: Path | None, docx_path: Path | None):
+        if hasattr(self, "_action_frame"):
+            self._action_frame.destroy()
+        self._action_frame = ttk.Frame(self)
+        self._action_frame.pack(pady=4)
+        secondary_btn(self._action_frame, "📂 Open Output Folder",
+                      command=lambda: self._open_path(folder)).pack(side="left", padx=4)
+        if pdf_path and pdf_path.exists():
+            primary_btn(self._action_frame, "👁 Open PDF",
+                        command=lambda: self._open_path(pdf_path)).pack(side="left", padx=4)
+        if xlsx_path and xlsx_path.exists():
+            secondary_btn(self._action_frame, "📊 Open Excel",
+                          command=lambda: self._open_path(xlsx_path)).pack(side="left", padx=4)
+        if docx_path and docx_path.exists():
+            secondary_btn(self._action_frame, "📝 Open Word",
+                          command=lambda: self._open_path(docx_path)).pack(side="left", padx=4)
+        messagebox.showinfo(
+            "Export Complete",
+            f"✅ Files saved to:\n{folder}")

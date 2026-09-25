@@ -37,29 +37,56 @@ class ValidationResult:
 def build_wtb_lines(wtb_rows, raw_tb_rows) -> list[WTBLine]:
     """Build WTBLine objects from database rows with error resilience."""
     lookup = get_lookup_map()
-    raw_map = {r["id"]: r for r in raw_tb_rows if "id" in r}
-    lines = []
     
+    # Index raw_tb by id
+    raw_map = {}
+    for r in raw_tb_rows:
+        rd = dict(r) if hasattr(r, "keys") else (r if isinstance(r, dict) else {})
+        if "id" in rd:
+            raw_map[rd["id"]] = rd
+
+    # Index wtb by raw_tb_id
+    wtb_by_raw_id = {}
     for row in wtb_rows:
-        try:
-            # sqlite3.Row does not have .get(), convert to dict for resilience
-            w = dict(row) if not isinstance(row, dict) else row
-            
-            raw_id = w.get("raw_tb_id")
-            if raw_id is None:
-                continue
-                
-            raw_data = raw_map.get(raw_id)
-            raw = dict(raw_data) if raw_data and not isinstance(raw_data, dict) else raw_data
-            m_code = w.get("mapping_code")
+        w = dict(row) if hasattr(row, "keys") else (row if isinstance(row, dict) else {})
+        raw_id = w.get("raw_tb_id")
+        if raw_id is not None:
+            wtb_by_raw_id[raw_id] = w
+
+    lines = []
+    if raw_map:
+        for raw_id, raw in raw_map.items():
+            w = wtb_by_raw_id.get(raw_id, {})
+            m_code = w.get("mapping_code") or ""
             entry = lookup.get(m_code) if m_code else None
-            
+            cy_net = float(w.get("cy_net") if "cy_net" in w and w.get("cy_net") is not None else raw.get("cy_net") or 0.0)
+            py_net = float(w.get("py_net") if "py_net" in w and w.get("py_net") is not None else raw.get("py_net") or 0.0)
             lines.append(WTBLine(
-                wtb_id       = int(w.get("id") or 0),
+                wtb_id       = int(w.get("id") or raw_id),
                 raw_tb_id    = raw_id,
-                ledger_name  = (raw["ledger_name"] if raw and "ledger_name" in raw else "Unknown Ledger"),
-                group_name   = (raw["group_name"] if raw and "group_name" in raw else ""),
-                mapping_code = m_code or "",
+                ledger_name  = raw.get("ledger_name") or w.get("ledger_name") or "Unknown Ledger",
+                group_name   = raw.get("group_name") or w.get("group_name") or "",
+                mapping_code = m_code,
+                entry        = entry,
+                confidence   = float(w.get("confidence") or 0.0),
+                source       = w.get("confidence_source") or "MANUAL",
+                cy_net       = cy_net,
+                py_net       = py_net,
+                is_confirmed = bool(w.get("is_confirmed", 0)),
+            ))
+    else:
+        for row in wtb_rows:
+            w = dict(row) if hasattr(row, "keys") else (row if isinstance(row, dict) else {})
+            raw_id = w.get("raw_tb_id") or 0
+            raw = raw_map.get(raw_id)
+            m_code = w.get("mapping_code") or ""
+            entry = lookup.get(m_code) if m_code else None
+            lines.append(WTBLine(
+                wtb_id       = int(w.get("id") or raw_id),
+                raw_tb_id    = raw_id,
+                ledger_name  = (raw.get("ledger_name") if raw else None) or w.get("ledger_name") or "Unknown Ledger",
+                group_name   = (raw.get("group_name") if raw else None) or w.get("group_name") or "",
+                mapping_code = m_code,
                 entry        = entry,
                 confidence   = float(w.get("confidence") or 0.0),
                 source       = w.get("confidence_source") or "MANUAL",
@@ -67,12 +94,7 @@ def build_wtb_lines(wtb_rows, raw_tb_rows) -> list[WTBLine]:
                 py_net       = float(w.get("py_net") or 0.0),
                 is_confirmed = bool(w.get("is_confirmed", 0)),
             ))
-        except (KeyError, ValueError, TypeError) as e:
-            # Log error but don't crash the whole list building
-            import logging
-            logging.getLogger(__name__).error(f"Error processing WTB row {w}: {e}")
-            continue
-            
+
     return lines
 
 

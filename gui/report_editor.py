@@ -4,34 +4,38 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk, messagebox, font as tkfont
 from config import THEME as T
-from gui.theme import primary_btn, secondary_btn, label
+from gui.theme import primary_btn, secondary_btn, label, ribbon
 from export.docx_exporter import (
     DIRECTORS_REPORT_TEMPLATE, AUDIT_REPORT_TEMPLATE, _fill
 )
 
 
 class ReportEditor(ttk.Frame):
-    def __init__(self, parent, db, report_type: str = "directors"):
+    def __init__(self, parent, db, report_type: str = "directors", on_proceed: callable = None, on_back: callable = None):
         super().__init__(parent)
         self._db   = db
         self._type = report_type  # "directors" or "audit"
+        self._on_proceed = on_proceed
+        self._on_back = on_back
         self._build()
         self._load_template()
 
     def _build(self):
-        # Toolbar
-        bar = ttk.Frame(self)
-        bar.pack(fill="x", padx=6, pady=4)
+        # Toolbar (nav first so it stays visible at 1024px)
+        _, bar, nav = ribbon(self, padx=6, pady=4)
+        primary_btn(nav, "Proceed to Export →", command=self._proceed).pack(side="right", padx=2)
+        secondary_btn(nav, "← Back", command=self._back).pack(side="right", padx=2)
+
         title_text = ("8a.  Directors' Report" if self._type == "directors"
-                      else "8b.  Independent Auditor's Report")
+                      else "8b.  Auditor's Report")
         label(bar, title_text, style="Sec.TLabel").pack(side="left")
-        primary_btn(bar, "Load Template", command=self._load_template).pack(side="left", padx=8)
-        secondary_btn(bar, "💾 Save Text", command=self._save).pack(side="left", padx=4)
-        secondary_btn(bar, "↺ Reset to Template", command=self._reset).pack(side="left", padx=4)
+        primary_btn(bar, "💾 Save", command=self._save).pack(side="left", padx=2)
+        secondary_btn(bar, "Template", command=self._load_template).pack(side="left", padx=2)
+        secondary_btn(bar, "↺ Reset", command=self._reset).pack(side="left", padx=2)
 
         # Audit Report — opinion type dropdown
         if self._type == "audit":
-            ttk.Label(bar, text="Opinion:").pack(side="left", padx=(16, 4))
+            ttk.Label(bar, text="Opinion:").pack(side="left", padx=(8, 2))
             self._opinion_var = tk.StringVar(
                 value=self._db.get_entity("opinion_type") or "Unmodified")
             opinion_cb = ttk.Combobox(
@@ -39,7 +43,7 @@ class ReportEditor(ttk.Frame):
                 values=["Unmodified", "Qualified", "Adverse", "Disclaimer"],
                 state="readonly", width=12,
             )
-            opinion_cb.pack(side="left", padx=4)
+            opinion_cb.pack(side="left", padx=2)
             opinion_cb.bind("<<ComboboxSelected>>", self._on_opinion_change)
 
         # Formatting toolbar
@@ -112,13 +116,24 @@ class ReportEditor(ttk.Frame):
         self._text.insert("1.0", text)
         self._status_var.set("Template loaded — edit and save.")
 
+    def _proceed(self):
+        if self._on_proceed:
+            self._on_proceed()
+
+    def _back(self):
+        if self._on_back:
+            self._on_back()
+
     def _reset(self):
+        if not messagebox.askyesno("Reset Report", "Discard any changes and reset this report to the default template?"):
+            return
         em  = self._db.get_all_entity()
         tpl = (DIRECTORS_REPORT_TEMPLATE if self._type == "directors"
                else AUDIT_REPORT_TEMPLATE)
         text = _fill(tpl, em)
         self._text.delete("1.0", "end")
         self._text.insert("1.0", text)
+        self._status_var.set("Template reset.")
 
     def _save(self):
         key  = ("directors_report_text" if self._type == "directors"
@@ -150,22 +165,30 @@ class ReportEditor(ttk.Frame):
     def _find(self):
         dlg = tk.Toplevel(self)
         dlg.title("Find")
-        dlg.geometry("350x80")
+        dlg.geometry("380x80")
         dlg.resizable(False, False)
         dlg.grab_set()
         var = tk.StringVar()
-        ttk.Entry(dlg, textvariable=var, width=30).pack(side="left", padx=8, pady=20)
-        def do_find():
+        ttk.Entry(dlg, textvariable=var, width=28).pack(side="left", padx=8, pady=20)
+        search_pos = ["1.0"]
+        def do_find(next_match=False):
             term = var.get()
             if not term:
                 return
-            start = self._text.search(term, "1.0", stopindex="end")
-            if start:
-                end = f"{start}+{len(term)}c"
+            start_idx = search_pos[0] if next_match else "1.0"
+            pos = self._text.search(term, start_idx, stopindex="end")
+            if not pos and next_match and start_idx != "1.0":
+                pos = self._text.search(term, "1.0", stopindex="end")
+            if pos:
+                end = f"{pos}+{len(term)}c"
                 self._text.tag_remove("sel", "1.0", "end")
-                self._text.tag_add("sel", start, end)
-                self._text.see(start)
-        ttk.Button(dlg, text="Find", command=do_find).pack(side="left", padx=4)
+                self._text.tag_add("sel", pos, end)
+                self._text.see(pos)
+                search_pos[0] = end
+            else:
+                messagebox.showinfo("Find", f"'{term}' not found.")
+        ttk.Button(dlg, text="Find", command=lambda: do_find(False)).pack(side="left", padx=2)
+        ttk.Button(dlg, text="Find Next", command=lambda: do_find(True)).pack(side="left", padx=2)
 
     def _on_opinion_change(self, *_):
         opinion = self._opinion_var.get()

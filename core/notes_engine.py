@@ -34,13 +34,25 @@ class NotesEngine:
         self._div    = divisor
         self._em     = entity_master or {}
 
+    def _signed(self, val: float, code: str) -> float:
+        # Same convention as FSEngine: Debit (DR_POSITIVE, negative in TB)
+        # is multiplied by -1 for II. ASSETS / non-Revenue presentation.
+        # Credit is multiplied by 1 to maintain status quo.
+        from core.master_db import get_lookup_map
+        entry = get_lookup_map().get(code)
+        if entry and entry.sign == "DR_POSITIVE":
+            return -val
+        return val
+
     def _cy(self, code: str) -> float:
         v = self._t.get(code, (0.0, 0.0))[0]
-        return round(v / self._div, 2) if self._div else v
+        val = round(v / self._div, 2) if self._div else v
+        return self._signed(val, code)
 
     def _py(self, code: str) -> float:
         v = self._t.get(code, (0.0, 0.0))[1]
-        return round(v / self._div, 2) if self._div else v
+        val = round(v / self._div, 2) if self._div else v
+        return self._signed(val, code)
 
     def _sum_cy(self, codes: list[str]) -> float:
         return round(sum(self._cy(c) for c in codes), 2)

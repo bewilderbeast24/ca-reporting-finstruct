@@ -6,7 +6,7 @@ from tkinter import ttk, simpledialog
 from config import THEME as T
 from core.notes_engine import Note
 from core.fs_engine import FSLine
-from gui.theme import label, primary_btn, secondary_btn, scrolled_frame
+from gui.theme import label, primary_btn, secondary_btn, scrolled_frame, ribbon
 
 
 def _fmt(v):
@@ -108,10 +108,12 @@ class NotesGrid(ttk.Frame):
 
 
 class NotesView(ttk.Frame):
-    def __init__(self, parent, notes: list[Note], db):
+    def __init__(self, parent, notes: list[Note], db, on_proceed: callable = None, on_back: callable = None):
         super().__init__(parent)
         self._notes = notes or []
         self._db    = db
+        self._on_proceed = on_proceed
+        self._on_back = on_back
         self._page_size = 5
         self._current_page = 0
         self._grids: dict[int, NotesGrid] = {}
@@ -136,12 +138,26 @@ class NotesView(ttk.Frame):
             return ("Rs. Current Year", "Rs. Previous Year")
 
     def _build(self):
-        top = ttk.Frame(self)
-        top.pack(fill="x", padx=8, pady=6)
-        label(top, "7.  Notes to Financial Statements", style="Sec.TLabel").pack(side="left")
-        primary_btn(top, "Save All Note Edits", command=self._save_all).pack(side="right", padx=4)
-        self._counter_lbl = label(top, "", style="Muted.TLabel")
-        self._counter_lbl.pack(side="right", padx=20)
+        _, top, nav = ribbon(self)
+        # Navigation first so it stays visible at 1024px
+        primary_btn(nav, "Proceed to Reports →", command=self._proceed).pack(side="right", padx=2)
+        primary_btn(nav, "💾 Save All", command=self._save_all).pack(side="right", padx=2)
+        secondary_btn(nav, "← Back to FS", command=self._back).pack(side="right", padx=2)
+        self._counter_lbl = label(nav, "", style="Muted.TLabel")
+        self._counter_lbl.pack(side="right", padx=4)
+
+        label(top, "7.  Notes", style="Sec.TLabel").pack(side="left")
+
+        if self._notes:
+            secondary_btn(top, "◀ Prev", command=self._prev_page).pack(side="left", padx=2)
+            secondary_btn(top, "Next ▶", command=self._next_page).pack(side="left", padx=2)
+            ttk.Label(top, text="Jump:").pack(side="left", padx=(4, 2))
+            self._jump_var = tk.StringVar()
+            jump_vals = [f"Note {n.number}: {n.title}" for n in self._notes]
+            self._jump_combo = ttk.Combobox(top, textvariable=self._jump_var, values=jump_vals,
+                                            state="readonly", width=24)
+            self._jump_combo.pack(side="left", padx=2)
+            self._jump_combo.bind("<<ComboboxSelected>>", self._on_jump_selected)
 
         # Validation: check if notes exist
         if not self._notes:
@@ -158,9 +174,6 @@ class NotesView(ttk.Frame):
         self._nb = ttk.Notebook(self)
         self._nb.pack(fill="both", expand=True, padx=8, pady=4)
 
-        self._prev_frame = ttk.Frame(self._nb)
-        self._next_frame = ttk.Frame(self._nb)
-
         self._grids = {}
         self._note_frames = []
         for note in self._notes:
@@ -170,6 +183,33 @@ class NotesView(ttk.Frame):
 
         self._update_tabs()
 
+    def _prev_page(self):
+        if self._current_page > 0:
+            self._current_page -= 1
+            self._update_tabs()
+
+    def _next_page(self):
+        max_page = (len(self._notes) - 1) // self._page_size if self._notes else 0
+        if self._current_page < max_page:
+            self._current_page += 1
+            self._update_tabs()
+
+    def _on_jump_selected(self, *_):
+        idx = self._jump_combo.current()
+        if idx < 0 or idx >= len(self._notes):
+            return
+        self._current_page = idx // self._page_size
+        tab_idx_on_page = idx % self._page_size
+        self._update_tabs(select_index=tab_idx_on_page)
+
+    def _proceed(self):
+        if self._on_proceed:
+            self._on_proceed()
+
+    def _back(self):
+        if self._on_back:
+            self._on_back()
+
     def _update_tabs(self, select_index=None):
         """Rebuild the visible tabs based on current page."""
         self._nb.unbind("<<NotebookTabChanged>>")
@@ -177,25 +217,20 @@ class NotesView(ttk.Frame):
             self._nb.forget(tab)
 
         start = self._current_page * self._page_size
-        end = start + self._page_size
+        end = min(start + self._page_size, len(self._notes))
 
-        if self._current_page > 0:
-            self._nb.add(self._prev_frame, text="« Prev")
-
-        for i in range(start, min(end, len(self._notes))):
+        for i in range(start, end):
             self._nb.add(self._note_frames[i], text=f"Note {self._notes[i].number}")
-
-        if end < len(self._notes):
-            self._nb.add(self._next_frame, text="Next »")
 
         if select_index is not None:
             try:
                 self._nb.select(select_index)
             except tk.TclError:
-                self._nb.select(0)
+                if self._nb.tabs():
+                    self._nb.select(0)
         else:
-            idx = 1 if self._current_page > 0 else 0
-            self._nb.select(idx)
+            if self._nb.tabs():
+                self._nb.select(0)
 
         self._update_counter()
         self._nb.bind("<<NotebookTabChanged>>", self._on_tab_changed)
@@ -211,23 +246,13 @@ class NotesView(ttk.Frame):
         try:
             idx = self._note_frames.index(sel_widget)
             self._counter_lbl.configure(text=f"Note {idx + 1} of {len(self._notes)}")
+            if hasattr(self, "_jump_combo") and 0 <= idx < len(self._notes):
+                self._jump_combo.current(idx)
         except ValueError:
-            # Not a note frame (likely Prev/Next nav tab)
             pass
 
     def _on_tab_changed(self, event):
-        sel = self._nb.select()
-        if not sel: return
-        txt = self._nb.tab(sel, "text")
-        if txt == "« Prev":
-            self._current_page -= 1
-            target = self._page_size if self._current_page > 0 else self._page_size - 1
-            self._update_tabs(select_index=target)
-        elif txt == "Next »":
-            self._current_page += 1
-            self._update_tabs(select_index=1)
-        else:
-            self._update_counter()
+        self._update_counter()
 
     def _build_note_tab(self, parent, note: Note):
         ttk.Label(parent, text=f"Note {note.number}: {note.title}",
