@@ -4,7 +4,7 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk, messagebox, font as tkfont
 from config import THEME as T
-from gui.theme import primary_btn, secondary_btn, label
+from gui.theme import primary_btn, secondary_btn, label, ribbon
 from export.docx_exporter import (
     DIRECTORS_REPORT_TEMPLATE, AUDIT_REPORT_TEMPLATE, _fill
 )
@@ -21,19 +21,21 @@ class ReportEditor(ttk.Frame):
         self._load_template()
 
     def _build(self):
-        # Toolbar
-        bar = ttk.Frame(self)
-        bar.pack(fill="x", padx=6, pady=4)
+        # Toolbar (nav first so it stays visible at 1024px)
+        _, bar, nav = ribbon(self, padx=6, pady=4)
+        primary_btn(nav, "Proceed to Export →", command=self._proceed).pack(side="right", padx=2)
+        secondary_btn(nav, "← Back", command=self._back).pack(side="right", padx=2)
+
         title_text = ("8a.  Directors' Report" if self._type == "directors"
-                      else "8b.  Independent Auditor's Report")
+                      else "8b.  Auditor's Report")
         label(bar, title_text, style="Sec.TLabel").pack(side="left")
-        primary_btn(bar, "💾 Save Text", command=self._save).pack(side="left", padx=8)
-        secondary_btn(bar, "Load Template", command=self._load_template).pack(side="left", padx=4)
-        secondary_btn(bar, "↺ Reset to Template", command=self._reset).pack(side="left", padx=4)
+        primary_btn(bar, "💾 Save", command=self._save).pack(side="left", padx=2)
+        secondary_btn(bar, "Template", command=self._load_template).pack(side="left", padx=2)
+        secondary_btn(bar, "↺ Reset", command=self._reset).pack(side="left", padx=2)
 
         # Audit Report — opinion type dropdown
         if self._type == "audit":
-            ttk.Label(bar, text="Opinion:").pack(side="left", padx=(16, 4))
+            ttk.Label(bar, text="Opinion:").pack(side="left", padx=(8, 2))
             self._opinion_var = tk.StringVar(
                 value=self._db.get_entity("opinion_type") or "Unmodified")
             opinion_cb = ttk.Combobox(
@@ -41,11 +43,8 @@ class ReportEditor(ttk.Frame):
                 values=["Unmodified", "Qualified", "Adverse", "Disclaimer"],
                 state="readonly", width=12,
             )
-            opinion_cb.pack(side="left", padx=4)
+            opinion_cb.pack(side="left", padx=2)
             opinion_cb.bind("<<ComboboxSelected>>", self._on_opinion_change)
-
-        primary_btn(bar, "Proceed to Export →", command=self._proceed).pack(side="right", padx=4)
-        secondary_btn(bar, "← Back to Notes", command=self._back).pack(side="right", padx=4)
 
         # Formatting toolbar
         fmt = ttk.Frame(self)
